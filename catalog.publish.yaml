@@ -8,12 +8,14 @@
 
 # The S3 URI uploads are written to.
 #
-# This is the real bucket behind Source Cooperative, not the data.source.coop
-# gateway, because writes go through an IAM role Source Cooperative has
-# approved rather than per-account keys it issues. The two are the same bytes
-# through different doors: the repository is a key prefix here, where at the
-# gateway it was the bucket name.
-write_prefix: s3://us-west-2.opendata.source.coop/portolan-mirrors/geoboundaries-catalog
+# This names the data.source.coop gateway's view of the bucket: there the
+# organization is the bucket and the repository is the first key segment.
+# Local publishes go through this door with the publisher's own Source
+# Cooperative credentials (`source-coop login`). CI with an approved IAM role
+# would instead write to the real bucket,
+# s3://us-west-2.opendata.source.coop/portolan-mirrors/geoboundaries-catalog,
+# with no endpoint_url -- same bytes, different door.
+write_prefix: s3://portolan-mirrors/geoboundaries-catalog
 
 # The public base URL that serves write_prefix. Every href in the catalog is
 # built from this, so it goes in the STAC JSON and write_prefix does not.
@@ -21,15 +23,15 @@ public_base: https://data.source.coop/portolan-mirrors/geoboundaries-catalog
 
 region: us-west-2
 
-# No endpoint_url: write_prefix names the bucket in AWS S3 directly, so the
-# default endpoint is the correct one. Pointing this at data.source.coop while
-# write_prefix names the real bucket would send every request to the gateway
-# under a bucket name that does not exist there.
+# The S3-compatible endpoint that serves write_prefix's bucket. Required in
+# gateway mode (see write_prefix); remove it, and rewrite write_prefix to the
+# real bucket, when publishing through an approved IAM role instead.
+endpoint_url: https://data.source.coop
 
 # The named AWS profile the publisher uses. Optional -- CI leaves it unused,
 # because configure-aws-credentials puts the assumed role in the environment
 # and publish.py prefers that whenever AWS_ACCESS_KEY_ID is set.
-profile: portolan-mirrors
+profile: source-coop
 
 # The directory that IS the published catalog, synced 1:1 to write_prefix.
 # Nothing outside it is ever uploaded.
