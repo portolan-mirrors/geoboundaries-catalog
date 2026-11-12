@@ -65,6 +65,9 @@ processing_notes: >
   48,978 joined rows have a bbox narrower than their true extent.
 
 known_issues: >
+  **This catalog is not a byte-for-byte mirror.** It repairs faults in the
+  upstream release and adds products geoBoundaries does not publish. docs/changes-from-upstream.md in the repository lists every deviation from the upstream release, with how to reproduce each one and how to get the vanilla behaviour.
+
   **This is a sidecar, not a boundary dataset.** The geometry column is one
   point per unit, for a marker. The unit's actual shape lives in the adm0,
   adm1 or adm2 collection. Do not compute area, length or containment from
@@ -91,12 +94,12 @@ known_issues: >
   code 111 to 129 rather than an ISO code, except Western Sahara which uses
   ESH.
 
-  **Display name and search name differ for 38 rows.** The name column
-  carries geoBoundaries' double-encoded text, for example
-  "RegiÃ³n de ValparaÃ­so". name_norm carries the repaired, folded form, so
-  the row is findable, but an interface that shows name will show the
-  mojibake. Showing a repaired name means repeating the repair client side;
-  the rule is in tools/build_names.py.
+  **38 names are repaired rather than mirrored.** The name column carries
+  the repaired text, for example "Región de Valparaíso" where geoBoundaries
+  publishes "RegiÃ³n de ValparaÃ­so", so display and search agree and no
+  client has to repeat the repair. The boundary collections carry the same
+  repaired text. The upstream bytes are preserved in the before-and-after
+  table in docs/changes-from-upstream.md, not as a column here.
 
   **No parent names.** There is no province or region field, because CGAZ
   publishes no key linking a second-level unit to the first-level unit

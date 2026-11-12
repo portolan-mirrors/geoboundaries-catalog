@@ -289,7 +289,10 @@ SPECS: list[dict] = [
             "international boundaries. Read the [agent guide](AGENTS.md): "
             "`shapeType` is what tells you whether a row is really an ADM1 "
             "unit, and the composite publishes no key linking a unit to its "
-            "parent country's subdivisions."
+            "parent country's subdivisions. A second GeoParquet file, "
+            "`cgaz_adm1_display.parquet`, carries the same rows in the same "
+            "order with geometry simplified and buffered outward, 13 MB "
+            "against 75, for drawing and for spatial filtering."
         ),
         keywords=[
             "administrative boundaries", "states", "provinces", "regions",
@@ -548,6 +551,8 @@ def build(spec: dict) -> dict:
             sys.exit(f"missing {path}; run the build tools first")
     stats = parquet_stats(parquet)
 
+    display = data_dir / spec["parquet"].replace(".parquet", "_display.parquet")
+
     assets: dict[str, dict] = {
         "data": {
             "href": f"./{spec['parquet']}",
@@ -572,6 +577,41 @@ def build(spec: dict) -> dict:
             "pmtiles:layers": [spec["pmtiles_layer"]],
         },
     }
+    if display.exists():
+        disp_stats = parquet_stats(display)
+        assets["display"] = {
+            # "overview" is STAC's common role for a reduced-resolution
+            # version of the data asset, which is exactly what this is. The
+            # "data" role stays on the verbatim file.
+            "href": f"./{display.name}",
+            "type": "application/vnd.apache.parquet",
+            "title": (
+                f"{spec['short']}, display and filter geometry "
+                f"({disp_stats['row_groups']} row groups of "
+                f"{spec['row_group_rows']:,} rows, aligned with the data "
+                "asset)"
+            ),
+            "roles": ["data", "overview"],
+            "description": (
+                "The same rows in the same order and the same row group "
+                "boundaries as the data asset, with geometry simplified and "
+                "then buffered **outward** by the simplification tolerance, "
+                "so the shape contains the true boundary rather than cutting "
+                "inside it. Built for drawing an outline fast and for "
+                "pre-filtering another dataset, where over-fetching is cheap "
+                "and a missing edge feature is a wrong answer. Neighbouring "
+                "units overlap in the margin. Do not measure area from it, "
+                "do not use it to decide which side of a border a point "
+                "falls on, and do not publish it as a boundary. See the "
+                "[catalog agent guide](../AGENTS.md) and "
+                "[changes-from-upstream.md](../changes-from-upstream.md)."
+            ),
+            "file:size": display.stat().st_size,
+            "file:checksum": checksum(display),
+            "table:primary_geometry": disp_stats["primary"],
+            "table:row_count": disp_stats["rows"],
+        }
+
     for slug, title in spec["styles"].items():
         style_path = out_dir / "styles" / f"{slug}.json"
         if not style_path.exists():

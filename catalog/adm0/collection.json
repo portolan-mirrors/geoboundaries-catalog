@@ -125,8 +125,8 @@
       "roles": [
         "data"
       ],
-      "file:size": 97209913,
-      "file:checksum": "1220264123fc1bd0d00e83e7b5cdc8445105f925a1216cd7094c5eacc41268e0a049",
+      "file:size": 96593435,
+      "file:checksum": "12206ef3b8285b5dcaf23ee54be3add833b0cbc1b4d9909f6f09b5808ae8fafb75dd",
       "table:primary_geometry": "geometry"
     },
     "pmtiles": {
@@ -137,11 +137,25 @@
         "visual",
         "data"
       ],
-      "file:size": 7149763,
-      "file:checksum": "12207a65d2c3bbbd3a94f321322f43d8820609971a115af28ad36677a0a431888af8",
+      "file:size": 7149725,
+      "file:checksum": "122080b52eeb06a3554bafc79402e99c3e259b5496f215b6726d8bbc6d05c0595dae",
       "pmtiles:layers": [
         "adm0"
       ]
+    },
+    "display": {
+      "href": "./cgaz_adm0_display.parquet",
+      "type": "application/vnd.apache.parquet",
+      "title": "Country Boundaries, display and filter geometry (55 row groups of 4 rows, aligned with the data asset)",
+      "roles": [
+        "data",
+        "overview"
+      ],
+      "description": "The same rows in the same order and the same row group boundaries as the data asset, with geometry simplified and then buffered **outward** by the simplification tolerance, so the shape contains the true boundary rather than cutting inside it. Built for drawing an outline fast and for pre-filtering another dataset, where over-fetching is cheap and a missing edge feature is a wrong answer. Neighbouring units overlap in the margin. Do not measure area from it, do not use it to decide which side of a border a point falls on, and do not publish it as a boundary. See the [catalog agent guide](../AGENTS.md) and [changes-from-upstream.md](../changes-from-upstream.md).",
+      "file:size": 7374831,
+      "file:checksum": "12206446f8614d2e5cf9ef84f725a313eef629ad33d2ca78aeec7d1f1f57966f225c",
+      "table:primary_geometry": "geometry",
+      "table:row_count": 218
     },
     "style-default": {
       "href": "./styles/default.json",
@@ -203,8 +217,8 @@
       "roles": [
         "thumbnail"
       ],
-      "file:size": 201225,
-      "file:checksum": "12202f0478bfc3dbf5c8482468d876e3cae86ebf1528d5913e676db99348691ca26c"
+      "file:size": 201219,
+      "file:checksum": "122019f133db0dfa5a5ca4a51be80ecb04362d349e2803f43138a7cd491b7c104023"
     }
   },
   "links": [

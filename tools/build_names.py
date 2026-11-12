@@ -43,6 +43,7 @@ import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from gbcommon import (
+    repair_mojibake,
     shrink_bbox_float32,
     NAMES_ROW_GROUP_ROWS,
     PUBLISH,
@@ -53,34 +54,6 @@ from gbcommon import (
 
 OUT_DIR = PUBLISH / "names"
 OUT = OUT_DIR / "cgaz_names.parquet"
-
-
-def repair_mojibake(name: str) -> tuple[str, bool]:
-    """Undo one round of UTF-8 bytes read as Latin-1, where that applies.
-
-    30 upstream rows carry double-encoded names: the ADM1 file holds
-    ``RegiÃ³n de ValparaÃ­so`` where the intended name is ``Región de
-    Valparaíso``. The damage is a pure byte-level round trip, so encoding the
-    string back to Latin-1 and decoding it as UTF-8 reverses it exactly.
-
-    The repair is applied only to ``name_norm``, never to ``name``. ``name``
-    stays byte-for-byte what geoBoundaries publishes, because this catalog is
-    a mirror. ``name_norm`` exists to be searched, and a name nobody can type
-    is a name nobody can find.
-
-    The guard is narrow. The round trip has to succeed, the result has to
-    differ from the input, and the input has to hold one of the mojibake lead
-    bytes. Anything else is returned unchanged.
-    """
-    if not any(c in name for c in ("Ã", "Â", "â€", "Å", "Ä")):
-        return name, False
-    try:
-        repaired = name.encode("latin-1").decode("utf-8")
-    except (UnicodeEncodeError, UnicodeDecodeError):
-        return name, False
-    if repaired == name:
-        return name, False
-    return repaired, True
 
 
 SQL = """
@@ -135,13 +108,21 @@ def main() -> int:
     table = con.execute(SQL.format(a0=a0, a1=a1, a2=a2)).to_arrow_table()
     con.close()
 
+    # The boundary collections already carry repaired names, so this is an
+    # assertion rather than a repair: anything still double-encoded here means
+    # the boundary files were not rebuilt.
     names = table.column("name").to_pylist()
-    repaired_count = 0
+    leftover = 0
     norms = []
     for raw in names:
         fixed, changed = repair_mojibake(raw)
-        repaired_count += changed
+        leftover += changed
         norms.append(normalize_name(fixed))
+    if leftover:
+        raise SystemExit(
+            f"{leftover} double-encoded name(s) reached the index; "
+            "rerun tools/build_boundaries.py first"
+        )
 
     table = table.append_column("name_norm", pa.array(norms, pa.string()))
 
@@ -207,7 +188,7 @@ def main() -> int:
         f"{md.num_row_groups} row groups, "
         f"{size / md.num_row_groups / 1024:.0f} KiB per group"
     )
-    print(f"  mojibake repaired in name_norm for {repaired_count} rows")
+    print("  names arrive already repaired: 0 double-encoded reached here")
     print(f"  bbox: {[round(v, 6) for v in bbox]}")
     return 0
 

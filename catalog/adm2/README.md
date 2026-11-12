@@ -37,6 +37,22 @@ build falls back to the country's first-level file, and failing that to its
 country polygon. The results are merged and gap-filled, and 20 disputed-area
 polygons are merged in.
 
+> **Not a byte-for-byte mirror.** This catalog repairs faults in the upstream
+> release and adds products geoBoundaries does not publish. Every deviation,
+> with how to reproduce it and how to get the vanilla behaviour, is in
+> [changes-from-upstream.md](../changes-from-upstream.md).
+
+## There is no ADM2 display file
+
+The other two levels carry a simplified `*_display.parquet` for fast drawing.
+This one does not, and that is a measurement rather than an omission: CGAZ
+already simplifies ADM2 upstream, so the median unit is 82 coordinates, the
+90th percentile 560, the 99th 2,837, and only 14 rows of 49,349 exceed 20,000.
+Reading one unit from this file is already sub-millisecond work. A tolerance
+coarse enough to shrink the file meaningfully would also put a buffer of a
+kilometre or more around units a few kilometres across, which is a poor trade
+at a level where nothing was slow.
+
 ## Known issues
 
 - **334 of 49,349 rows are not second-level units.** 312 are first-level units
@@ -56,13 +72,18 @@ polygons are merged in.
 - **"Second level" means different things in different countries** — a US
   county, a Brazilian município, a French commune. The level is structural, not
   semantic, and `area_km2` spans 0.000 to 12,063,872 in one column.
-- **843 of the 49,349 geometries are not OGC-valid**, and the same 843 fail on
-  a direct conversion of the upstream GeoPackage, so the invalidity is
-  upstream. Call `ST_MakeValid` before any overlay.
+- **843 of the 49,349 geometries were not OGC-valid upstream, and all 843 are
+  repaired here.** 0 rows fail `ST_IsValid` now. Area introduced is under
+  0.24 km² on every row but one: Sabaya (BOL) moves from 6,304.4 to 6,969.5
+  km², because the signed-area sum over its self-overlapping ring was
+  cancelling part of the shape.
 - **Simplification collapses the smallest units.** 107 rows measure under
   0.1 km², concentrated in Saint Lucia's urban districts and Pacific atolls.
-- **Six names are double-encoded upstream**, and several Norwegian names carry
-  quotation marks and a trailing " nor" from their source file.
+- **14 names are double-encoded upstream and are repaired here** — 10 New
+  Zealand names whose macrons arrive damaged, 4 Peruvian provinces. Several
+  Norwegian names still carry quotation marks and a trailing " nor" from their
+  source file; that is a spelling in the source, not an encoding fault, so it
+  is left alone.
 - **No validity dates**, and no per-unit source license: the CGAZ build drops
   both fields that geoBoundaries records per source boundary.
 
@@ -78,7 +99,7 @@ Four, each built from a measured distribution:
 | Second-level unit area (default) | geodesic area in six bands | 7,154 / 11,522 / 12,394 / 13,483 / 4,069 / 727 |
 | Second-level units in this country | `country_units` | 116 / 4,924 / 13,446 / 11,674 / 19,189 |
 | What each polygon really is | `shapeType` | 49,015 / 312 / 2 / 20 |
-| Outline compactness | Polsby-Popper ratio | 175 / 1,218 / 8,742 / 20,754 / 18,460 |
+| Outline compactness | Polsby-Popper ratio | 175 / 1,218 / 8,741 / 20,755 / 18,460 |
 
 ## License
 

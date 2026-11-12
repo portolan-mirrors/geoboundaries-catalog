@@ -55,6 +55,9 @@ processing_notes: >
   Parquet page index, 64 rows per row group.
 
 known_issues: >
+  **This catalog is not a byte-for-byte mirror.** It repairs faults in the
+  upstream release and adds products geoBoundaries does not publish. docs/changes-from-upstream.md in the repository lists every deviation from the upstream release, with how to reproduce each one and how to get the vanilla behaviour.
+
   **Not every row is a first-level unit.** 3,202 rows have shapeType ADM1,
   20 are disputed areas and 2 are whole countries: Antarctica and Vatican
   City, which have no first-level breakdown and are carried up so the
@@ -80,13 +83,16 @@ known_issues: >
   reads higher than it would on full-resolution outlines. They are
   reproducible, not authoritative.
 
-  **38 names across the catalog are double-encoded upstream.** 25 of them
-  are in this file, including all 16 Chilean regions, which read
-  "RegiÃ³n de ValparaÃ­so" where "Región de Valparaíso" was meant, and 7
-  Portuguese districts. shapeName here is byte-for-byte what geoBoundaries
-  publishes, so the damage is carried through. The names collection repairs
-  it in its name_norm column only, so the units remain findable. Reported
-  upstream as a data issue in the geoBoundaries repository is the right fix.
+  **24 names in this file are double-encoded upstream, and are repaired
+  here.** All 16 Chilean regions read "RegiÃ³n de ValparaÃ­so" upstream where
+  "Región de Valparaíso" was meant, along with 6 Portuguese districts and 2
+  Seychelles districts. shapeName here carries the repaired text, not the
+  upstream bytes: a name nobody can type is a name nobody can find, and this
+  catalog's own search index is the main way the data is reached. The repair
+  is a Latin-1 to UTF-8 round trip applied only where it succeeds and
+  changes the string; all 38 hits across the catalog were inspected by hand
+  and are tabulated, before and after, in
+  docs/changes-from-upstream.md.
 
   **Unit names are not unique and not uniform.** 3,143 distinct names across
   3,224 rows. Norwegian ADM2 and some ADM1 names carry a trailing " nor" and
@@ -104,10 +110,14 @@ known_issues: >
   carry that field, so the per-unit provenance is not recoverable from this
   file.
 
-  **346 of the 3,224 geometries are not OGC-valid**, and the same 346 fail on
-  a direct conversion of the upstream GeoPackage, so the invalidity is
-  upstream. Rendering and bbox queries are unaffected; an overlay, union or
-  intersection is not. Repair with ST_MakeValid(geometry) first.
+  **346 of the 3,224 geometries were not OGC-valid upstream, and 345 are
+  repaired here.** The published file carries
+  ST_CollectionExtract(ST_MakeValid(geometry), 3) for those rows and passes
+  the rest through unchanged. Area introduced: at most 0.0038 km2 on any
+  row, and exactly 0 on rows that were already valid. The one exception is
+  Kaafu (MDV), a four-point polygon of zero area that ST_MakeValid resolves
+  to a line; repairing it would delete the unit, so it is published as
+  upstream has it and is the single row where ST_IsValid is still false.
 
   **Simplification collapses the smallest units.** 4 rows measure under
   0.1 km2 and one, Kaafu in the Maldives, measures 0.0 km2 from 4 vertices.

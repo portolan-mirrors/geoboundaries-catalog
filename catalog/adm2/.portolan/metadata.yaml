@@ -52,6 +52,9 @@ processing_notes: >
   about 1.05 MB.
 
 known_issues: >
+  **This catalog is not a byte-for-byte mirror.** It repairs faults in the
+  upstream release and adds products geoBoundaries does not publish. docs/changes-from-upstream.md in the repository lists every deviation from the upstream release, with how to reproduce each one and how to get the vanilla behaviour.
+
   **22 countries have no second-level data here.** Their rows are the
   country's ADM1 polygons carried up instead, 312 of them, with shapeType
   ADM1: Malta (68), Moldova (37), Montenegro (23), Marshall Islands (22),
@@ -93,10 +96,11 @@ known_issues: >
   international boundaries. Areas, perimeters and compactness are measured
   on that geometry, so they are reproducible rather than authoritative.
 
-  **6 names in this file are double-encoded upstream**, 4 in Peru and 2 in
-  New Zealand plus the macron-bearing Auckland local board areas. shapeName
-  carries the damage through unchanged; the names collection repairs it in
-  name_norm only.
+  **14 names in this file are double-encoded upstream, and are repaired
+  here.** 10 New Zealand local board and district names whose macrons arrive
+  damaged, and 4 Peruvian provinces. shapeName carries the repaired text,
+  not the upstream bytes; the full before-and-after table is in
+  docs/changes-from-upstream.md.
 
   **No validity dates.** The CGAZ build drops geoBoundaries'
   boundaryYearRepresented.
@@ -107,10 +111,15 @@ known_issues: >
   source licenses, which the geoBoundaries API reports as boundaryLicense,
   are not carried by CGAZ and so are not recoverable from this file.
 
-  **843 of the 49,349 geometries are not OGC-valid**, and the same 843 fail
-  on a direct conversion of the upstream GeoPackage, so the invalidity is
-  upstream. Rendering and bbox queries are unaffected; an overlay, union or
-  intersection is not. Repair with ST_MakeValid(geometry) first.
+  **843 of the 49,349 geometries were not OGC-valid upstream, and all 843
+  are repaired here.** The published file carries
+  ST_CollectionExtract(ST_MakeValid(geometry), 3) for those rows and passes
+  the other 48,506 through unchanged, byte for byte. Measured on the
+  published file, 0 rows fail ST_IsValid. Area introduced is under 0.24 km2
+  on every row but one: Sabaya (BOL) moves from 6,304.4 to 6,969.5 km2,
+  because the signed-area sum over its self-overlapping ring was cancelling
+  part of the shape, so the repair corrects the number rather than inflating
+  it.
 
   **Simplification collapses the smallest units.** 107 rows measure under
   0.1 km2, concentrated in Saint Lucia's small urban districts and in

@@ -170,20 +170,24 @@ prefixes differ between levels, so no prefix or substring match works. Building
 the hierarchy means a spatial join, and on simplified clipped geometry that
 misassigns units along shared edges. This is the biggest gap in the dataset.
 
-**843 of the 49,349 geometries are not OGC-valid** **[derived]**, and the same
-843 fail on a direct conversion of the upstream GeoPackage, so the invalidity
-is upstream. Call `ST_MakeValid(geometry)` before any overlay, union or
-intersection. Drawing and bbox queries are unaffected.
+**843 of the 49,349 geometries were not OGC-valid upstream, and all 843 are
+repaired here** **[derived]**. The published file carries
+`ST_CollectionExtract(ST_MakeValid(geometry), 3)` for those rows and the other
+48,506 byte for byte; 0 rows fail `ST_IsValid` now. Area introduced is under
+0.24 km2 on every row but one: Sabaya (BOL) moves from 6,304.4 to 6,969.5 km2,
+because the signed-area sum over its self-overlapping ring was cancelling part
+of the shape, so the repair corrects the number rather than inflating it.
 
 **Simplification collapses the smallest units.** 107 rows measure under
 0.1 km2, concentrated in Saint Lucia's urban districts and Pacific atolls
 **[derived]**. The units are real; their geometry did not survive the 10%
 vertex reduction at a usable size.
 
-**Six names in this file are double-encoded upstream**, four in Peru and two
-in the Seychelles, plus ten New Zealand local board and district names whose
-macrons arrive damaged **[derived]**. `shapeName` carries them through
-unchanged; the `names` collection repairs them in `name_norm` only.
+**14 names in this file were double-encoded upstream, and are repaired here**
+**[derived]**: ten New Zealand local board and district names whose macrons
+arrive damaged, and four Peruvian provinces. `shapeName` carries the repaired
+text; the before-and-after table is in
+[changes-from-upstream.md](../changes-from-upstream.md).
 
 **Norwegian unit names carry artifacts from their source file.** Several read
 `"Evje og Hornnes" nor`, with the quotation marks and the trailing ` nor` in

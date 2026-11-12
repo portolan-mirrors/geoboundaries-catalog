@@ -90,6 +90,17 @@ The tradeoff is real and accepted: a full-table scan of these files reads more
 footer metadata than it would at 50,000 rows per group. The ADM2 footer is
 226,817 bytes, which is 0.2% of the file.
 
+### The `display` assets use the `overview` role
+
+Each boundary collection with a display sidecar publishes it as
+`"roles": ["data", "overview"]`. `overview` is STAC's common role for a
+reduced-resolution version of the data asset, which is what a simplified
+geometry file is; the Portolan profile does not define a role of its own for
+this case. The plain `data` role stays on the verbatim full-resolution file,
+so a client that only understands `data` gets the real geometry rather than a
+buffered approximation. If the Portolan spec later defines a better role, move
+to it and record the change in docs/changes-from-upstream.md.
+
 ### Thumbnails are not chiitiler renders
 
 The canonical thumbnail path renders `styles/default.json` through MapLibre GL

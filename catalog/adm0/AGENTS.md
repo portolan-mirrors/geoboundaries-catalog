@@ -138,10 +138,14 @@ this column to an ISO-keyed table silently drops or mismatches them.
 plus 20 disputed areas, and the 198 already have their dependent territories
 merged in.
 
-**87 of the 218 geometries are not OGC-valid** **[derived]**, and the same 87
-fail on a direct conversion of the upstream GeoPackage, so the invalidity is
-upstream. Drawing and bbox queries are unaffected; overlays are not. Call
-`ST_MakeValid(geometry)` before any topological operation.
+**87 of the 218 geometries were not OGC-valid upstream, and are repaired
+here** **[derived]**. The published file carries
+`ST_CollectionExtract(ST_MakeValid(geometry), 3)` for those 87 rows and the
+other 131 byte for byte; `SELECT count(*) ... WHERE NOT ST_IsValid(geometry)`
+returns 0. At most 0.003 km2 of area was introduced on any row, and exactly 0
+on rows that were already valid. The upstream GeoPackage still holds the
+invalid geometry; see the `source-gpkg` asset and
+[changes-from-upstream.md](../changes-from-upstream.md).
 
 **`compactness` is low for countries with islands**, because island outlines
 add perimeter without much area. Canada reads 0.003 and Russia 0.017

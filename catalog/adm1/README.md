@@ -28,6 +28,29 @@ polygon, which is why two rows here — Antarctica and Vatican City — are whol
 countries. The composite has no holes; the `shapeType` column is what tells you
 what you are looking at.
 
+> **Not a byte-for-byte mirror.** This catalog repairs faults in the upstream
+> release and adds products geoBoundaries does not publish. Every deviation,
+> with how to reproduce it and how to get the vanilla behaviour, is in
+> [changes-from-upstream.md](../changes-from-upstream.md).
+
+## The display file
+
+`cgaz_adm1_display.parquet` holds **the same rows in the same order with the
+same row group boundaries** as the data file, with geometry simplified and
+then buffered outward by the same distance. Row *i* and row group *g* mean the
+same unit in both, so one byte-range plan serves either.
+
+Use it to draw an outline, and to pre-filter another dataset to this unit. The
+outward bias is deliberate: a filter shape that sits inside the true boundary
+silently drops features along the edge, and over-fetching is cheap. Every
+feature retains at least 99.87% of its original area.
+
+Do **not** measure area from it, do not use it to decide which side of a
+border a point falls on, and do not publish it as a boundary: neighbouring
+units overlap in the margin. For any of that, read the data file. The full
+rule and the latitude caveat on a buffer measured in degrees are in the
+[catalog agent guide](../AGENTS.md).
+
 ## Known issues
 
 - **Not every row is a first-level unit.** 3,202 are; 20 are disputed areas and
@@ -41,14 +64,16 @@ what you are looking at.
 - **Geometry is simplified and clipped**, so it is not the source geometry. Use
   geoBoundaries' single-country releases when you need the full-resolution
   original.
-- **25 names are double-encoded upstream**, including all 16 Chilean regions,
-  which read `RegiÃ³n de ValparaÃ­so` where `Región de Valparaíso` was meant.
-  `shapeName` carries the damage through, because this is a mirror; the
-  [names collection](../names/collection.json) repairs it in its searchable
-  column so the units stay findable.
-- **346 of the 3,224 geometries are not OGC-valid**, and the same 346 fail on a
-  direct conversion of the upstream GeoPackage, so the invalidity is upstream.
-  Call `ST_MakeValid` before any overlay.
+- **24 names are double-encoded upstream, and are repaired here.** All 16
+  Chilean regions read `RegiÃ³n de ValparaÃ­so` upstream where `Región de
+  Valparaíso` was meant, plus 6 Portuguese and 2 Seychelles districts.
+  `shapeName` carries the repaired text; the full before-and-after table is in
+  [changes-from-upstream.md](../changes-from-upstream.md).
+- **346 of the 3,224 geometries were not OGC-valid upstream, and 345 are
+  repaired here.** At most 0.0038 km² of area was introduced. The exception is
+  Kaafu (MDV), a four-point polygon of zero area that `ST_MakeValid` resolves
+  to a line; repairing it would delete the unit, so it is published as
+  upstream has it.
 - **Simplification collapses the smallest units.** Four rows measure under
   0.1 km², and Kaafu in the Maldives measures 0.0 km² from four vertices. Do
   not use this level for small-island work.
@@ -67,7 +92,7 @@ Four, each built from a measured distribution:
 | First-level unit area (default) | geodesic area in six bands | 519 / 575 / 838 / 741 / 435 / 116 |
 | First-level units in this country | `country_units` | 23 / 539 / 959 / 937 / 766 |
 | What each polygon really is | `shapeType` | 3,202 / 2 / 20 |
-| Outline compactness | Polsby-Popper ratio | 103 / 364 / 980 / 1,169 / 608 |
+| Outline compactness | Polsby-Popper ratio | 103 / 363 / 981 / 1,169 / 608 |
 
 ## License
 

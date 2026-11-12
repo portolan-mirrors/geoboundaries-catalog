@@ -82,6 +82,62 @@ def run(cmd: list[str] | str, **kw) -> None:
     subprocess.run(cmd, shell=shell, check=True, **kw)
 
 
+# The lead sequences a double-encoded UTF-8 string can start a damaged
+# character with. The guard is a cheap pre-filter; the round trip below is
+# what actually decides.
+MOJIBAKE_LEADS = ("Ã", "Â", "â€", "Å", "Ä")
+
+
+def repair_mojibake(name: str) -> tuple[str, bool]:
+    """Undo one round of UTF-8 bytes read as Latin-1, where that applies.
+
+    38 rows of the upstream release carry double-encoded names: the ADM1 file
+    holds ``RegiÃ³n de ValparaÃ­so`` where the intended name is ``Región de
+    Valparaíso``. The damage is a pure byte-level round trip, so encoding the
+    string back to Latin-1 and decoding it as UTF-8 reverses it exactly.
+
+    The guard is narrow. The round trip has to succeed, the result has to
+    differ from the input, and the input has to hold one of the mojibake lead
+    sequences. Anything else is returned unchanged, which is why legitimate
+    Nordic names such as ``Äänekoski`` pass through: ``Ä`` is a lead sequence,
+    but ``Äänekoski`` encoded to Latin-1 is not valid UTF-8, so the round trip
+    raises and the name is kept.
+
+    All 38 hits were inspected by hand and are listed in
+    docs/changes-from-upstream.md. There is no false positive.
+    """
+    if not any(lead in name for lead in MOJIBAKE_LEADS):
+        return name, False
+    try:
+        repaired = name.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return name, False
+    if repaired == name:
+        return name, False
+    return repaired, True
+
+
+def repair_name_column(table, column: str):
+    """Apply repair_mojibake to one string column of an Arrow table."""
+    import pyarrow as pa
+
+    values = table.column(column).to_pylist()
+    repaired, pairs = [], []
+    for raw in values:
+        if raw is None:
+            repaired.append(None)
+            continue
+        fixed, changed = repair_mojibake(raw)
+        repaired.append(fixed)
+        if changed:
+            pairs.append((raw, fixed))
+    table = table.set_column(
+        table.schema.get_field_index(column), column,
+        pa.array(repaired, pa.string()),
+    )
+    return table, pairs
+
+
 def normalize_name(name: str | None) -> str | None:
     """Lowercase and strip accents, for prefix matching on a sorted column.
 

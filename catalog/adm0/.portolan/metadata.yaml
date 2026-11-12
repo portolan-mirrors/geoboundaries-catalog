@@ -55,6 +55,9 @@ processing_notes: >
   Parquet page index, 4 rows per row group.
 
 known_issues: >
+  **This catalog is not a byte-for-byte mirror.** It repairs faults in the
+  upstream release and adds products geoBoundaries does not publish. docs/changes-from-upstream.md in the repository lists every deviation from the upstream release, with how to reproduce each one and how to get the vanilla behaviour.
+
   **ADM0 publishes no shapeID.** The ADM1 and ADM2 levels carry one; this
   level does not, so shapeGroup is the only join key here. The names
   collection leaves shape_id NULL for its level-0 rows for the same reason.
@@ -101,10 +104,10 @@ known_issues: >
   which CGAZ is built from, is the release geoBoundaries describes as
   "CC-BY 4.0 compliant".
 
-  **87 of the 218 geometries are not OGC-valid.** ST_IsValid is false for
-  them, and the same 87 fail on a direct conversion of the upstream
-  GeoPackage, so the invalidity is upstream and no geometry operation here
-  introduced it. Rendering and bbox queries are unaffected; an overlay,
-  union or intersection is not. Repair with ST_MakeValid(geometry) before
-  any topological work. Count with: SELECT count(*) FROM adm0 WHERE NOT
-  ST_IsValid(geometry).
+  **87 of the 218 geometries were not OGC-valid upstream, and are repaired
+  here.** This catalog is not a byte-for-byte mirror: it publishes
+  ST_CollectionExtract(ST_MakeValid(geometry), 3) for those 87 rows and
+  passes the other 131 through unchanged. Measured on the published file,
+  0 rows fail ST_IsValid. Area introduced: at most 0.003 km2 on any row, and
+  exactly 0 on rows that were already valid. The upstream GeoPackage still
+  has the invalid geometry; see the source-gpkg asset.

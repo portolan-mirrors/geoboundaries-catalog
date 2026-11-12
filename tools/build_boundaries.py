@@ -36,6 +36,7 @@ import pyarrow.parquet as pq
 
 from gbcommon import (
     LEVELS,
+    repair_name_column,
     PUBLISH,
     ROW_GROUP_ROWS,
     WORK,
@@ -62,6 +63,11 @@ SOURCE_COLUMNS = {
 }
 
 GLOBAL_BOUNDS = "{min_x: -180, min_y: -90, max_x: 180, max_y: 90}::BOX_2D"
+
+# Rows whose geometry cannot be made valid without deleting the unit, so they
+# are published as the upstream release has them. One row in the whole
+# release: Kaafu (MDV) in the ADM1 file, a 4-point polygon of zero area.
+UNREPAIRABLE = {1: 1}
 
 
 def stage_raw(level: int) -> None:
@@ -154,9 +160,32 @@ def derive_and_sort(level: int) -> pa.Table:
     con.execute("INSTALL spatial; LOAD spatial;")
     con.execute("SET preserve_insertion_order = false;")
     sql = f"""
-    WITH src AS (
+    WITH raw AS (
       SELECT shapeName, {shape_id}, shapeGroup, shapeType, geometry
       FROM read_parquet('{src}')
+    ),
+    src AS (
+      -- Repair the geometry that is not OGC-valid upstream, and leave the
+      -- rest strictly alone. ST_MakeValid can return a GEOMETRYCOLLECTION
+      -- holding the repaired polygons plus zero-area lines and points, so
+      -- ST_CollectionExtract(..., 3) keeps the polygons; measured, that drops
+      -- 0.0 square degrees.
+      --
+      -- Three branches, and each one earns its place. A row that is already
+      -- valid is passed through byte for byte rather than round-tripped
+      -- through GEOS. A row whose repair yields no polygon at all keeps its
+      -- original geometry, because deleting a unit is worse than carrying an
+      -- invalid one: exactly one row in the release does this, Kaafu in the
+      -- Maldives, a 4-point polygon of zero area that ST_MakeValid resolves
+      -- to a line.
+      SELECT * EXCLUDE (geometry),
+        CASE
+          WHEN ST_IsValid(geometry) THEN geometry
+          WHEN NOT ST_IsEmpty(ST_CollectionExtract(ST_MakeValid(geometry), 3))
+            THEN ST_CollectionExtract(ST_MakeValid(geometry), 3)
+          ELSE geometry
+        END AS geometry
+      FROM raw
     ),
     counted AS ({counted}),
     measured AS (
@@ -187,8 +216,13 @@ def derive_and_sort(level: int) -> pa.Table:
     FROM measured
     ORDER BY ST_Hilbert(geometry, {GLOBAL_BOUNDS})
     """
+    repaired = con.execute(
+        f"SELECT count(*) FROM read_parquet('{src}') "
+        "WHERE NOT ST_IsValid(geometry)"
+    ).fetchone()[0]
     table = con.execute(sql).to_arrow_table()
     con.close()
+    print(f"  geometry: ST_MakeValid applied to {repaired:,} invalid row(s)")
     if not has_shape_id:
         table = table.drop_columns(["shapeID"])
     return table
@@ -232,11 +266,39 @@ def write_optimized(level: int, table: pa.Table) -> None:
     print(f"  bbox: {json.dumps([round(v, 6) for v in bbox])}")
 
 
+def verify(level: int) -> None:
+    """Assert the two repairs actually took, against the written file."""
+    out = PUBLISH / f"adm{level}" / f"cgaz_adm{level}.parquet"
+    con = duckdb.connect()
+    con.execute("LOAD spatial;")
+    invalid, mojibake = con.execute(
+        f"""SELECT
+              count(*) FILTER (WHERE NOT ST_IsValid(geometry)),
+              count(*) FILTER (WHERE shapeName LIKE '%Ã%'
+                                  OR shapeName LIKE '%â€%')
+            FROM read_parquet('{out.as_posix()}')"""
+    ).fetchone()
+    con.close()
+    if invalid > UNREPAIRABLE.get(level, 0) or mojibake:
+        raise SystemExit(
+            f"ADM{level}: {invalid} invalid geometry, "
+            f"{mojibake} double-encoded name(s) survived the repair"
+        )
+    print(
+        f"  verified: {invalid} invalid geometry "
+        f"(expected {UNREPAIRABLE.get(level, 0)}), "
+        f"{mojibake} double-encoded names"
+    )
+
+
 def build(level: int) -> None:
     print(f"ADM{level}: building")
     stage_raw(level)
     table = derive_and_sort(level)
+    table, pairs = repair_name_column(table, "shapeName")
+    print(f"  shapeName: repaired {len(pairs)} double-encoded name(s)")
     write_optimized(level, table)
+    verify(level)
 
 
 def main(argv: list[str]) -> int:

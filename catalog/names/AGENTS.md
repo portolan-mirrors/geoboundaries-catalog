@@ -295,6 +295,38 @@ then range-read the one row group of the right boundary file that the `bbox`
 covering column points at. That is why the boundary files have small row
 groups.
 
+### Which boundary file to range-read
+
+**Draw from the display file, analyse from the full-resolution one.**
+
+| what you are doing | read |
+|---|---|
+| Draw the unit's outline on a map, now | `adm0/cgaz_adm0_display.parquet`, `adm1/cgaz_adm1_display.parquet` |
+| Filter *another* dataset to this unit | the same display file |
+| Clip, measure, export, or any analysis | `adm{N}/cgaz_adm{N}.parquet` |
+| Second-level units, anything | `adm2/cgaz_adm2.parquet` — there is no ADM2 display file, because its median unit is 82 coordinates and nothing there was slow |
+
+The display files hold **the same rows in the same order with the same row
+group boundaries** as the full-resolution files, so the row index and the row
+group number you got from the full-resolution plan work unchanged against
+either. Row *i* is the same unit in both.
+
+Why it matters at ADM0: Canada is **528,021 coordinates** at full resolution
+and **68,973** in the display file; the United Kingdom is 61,752 against 6,815
+**[derived]**. CGAZ does not simplify ADM0 at all, so decoding a country
+outline from the full-resolution file to draw one highlight is what makes a
+browser tab stop responding.
+
+**The display geometry is buffered outward on purpose**, by the same distance
+it was simplified by, so it contains the true boundary rather than cutting
+corners inside it. Measured: every feature retains at least 99.87% of its
+original area, and no feature falls below 99% **[derived]**. That bias is what
+makes it safe as a spatial filter — you over-fetch a little rather than
+silently dropping features along the edge — and it is also why neighbouring
+units overlap in the margin and why you must not measure area from it. The
+full rule, and the latitude caveat on a buffer measured in degrees, is in the
+[catalog agent guide](../AGENTS.md).
+
 ## Quirks that produce silently wrong answers
 
 **A name is not an identifier.** 8,140 rows share their `name_norm` with at

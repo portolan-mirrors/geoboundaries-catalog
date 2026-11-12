@@ -127,8 +127,8 @@
       "roles": [
         "data"
       ],
-      "file:size": 101388646,
-      "file:checksum": "1220870e1343c0a978f8ff61a72f4b82d603965da665bd58a00868c4cb2555bd56cb",
+      "file:size": 100448329,
+      "file:checksum": "1220081f662a79ba833e07fb8f0fd87a7ed84043681bd142401fe01b0dd8192359ca",
       "table:primary_geometry": "geometry"
     },
     "pmtiles": {
@@ -139,8 +139,8 @@
         "visual",
         "data"
       ],
-      "file:size": 101399228,
-      "file:checksum": "1220f96208ba929ad6a72b804cf57ab3e1271cd8be9a19bdeb93d115dd1bd7a18ddd",
+      "file:size": 101391349,
+      "file:checksum": "1220aa98919110661582938d7ac9164fd7e40ac4399fdc67140ff5228e7defc298fa",
       "pmtiles:layers": [
         "adm2"
       ]
@@ -205,8 +205,8 @@
       "roles": [
         "thumbnail"
       ],
-      "file:size": 684384,
-      "file:checksum": "12208f9a88ed5e41a939b685471c52c08d8efe3f3bf5b9f04c74555821de6a140469"
+      "file:size": 684352,
+      "file:checksum": "1220dee988927bb0173c99262c2993fa799c6326e1698e634ae71ef066386be86df9"
     }
   },
   "links": [

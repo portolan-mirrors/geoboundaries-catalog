@@ -38,6 +38,29 @@ reduction in the upstream build applies to the lower levels only. That is why
 218 country polygons weigh more than 49,349 municipalities. Use the PMTiles
 archive to draw outlines; the GeoParquet is for analysis.
 
+> **Not a byte-for-byte mirror.** This catalog repairs faults in the upstream
+> release and adds products geoBoundaries does not publish. Every deviation,
+> with how to reproduce it and how to get the vanilla behaviour, is in
+> [changes-from-upstream.md](../changes-from-upstream.md).
+
+## The display file
+
+`cgaz_adm0_display.parquet` holds **the same rows in the same order with the
+same row group boundaries** as the data file, with geometry simplified and
+then buffered outward by the same distance. Row *i* and row group *g* mean the
+same unit in both, so one byte-range plan serves either.
+
+Use it to draw an outline, and to pre-filter another dataset to this unit. The
+outward bias is deliberate: a filter shape that sits inside the true boundary
+silently drops features along the edge, and over-fetching is cheap. Every
+feature retains at least 99.95% of its original area.
+
+Do **not** measure area from it, do not use it to decide which side of a
+border a point falls on, and do not publish it as a boundary: neighbouring
+units overlap in the margin. For any of that, read the data file. The full
+rule and the latitude caveat on a buffer measured in degrees are in the
+[catalog agent guide](../AGENTS.md).
+
 ## Known issues
 
 - **No `shapeID` column.** ADM1 and ADM2 have one; CGAZ ADM0 does not publish
@@ -46,9 +69,10 @@ archive to draw outlines; the GeoParquet is for analysis.
   `shapeType = 'ADM0'` for the 198 recognized ones.
 - **`shapeGroup` is not an ISO code for those 20 rows.** They carry `111`
   through `129`, except Western Sahara which uses `ESH`.
-- **87 of the 218 geometries are not OGC-valid.** The same 87 fail on a direct
-  conversion of the upstream GeoPackage, so the invalidity is upstream. Call
-  `ST_MakeValid` before any overlay; drawing and bbox queries are unaffected.
+- **87 of the 218 geometries were not OGC-valid upstream, and are repaired
+  here.** The published file carries `ST_MakeValid` output for those 87 rows
+  and the other 131 byte for byte; 0 rows fail `ST_IsValid` now. At most
+  0.003 km² of area was introduced on any row.
 - **No validity dates.** geoBoundaries records a year represented per source
   boundary; the CGAZ build drops it.
 - **Areas are measured, not official.** `area_km2` is geodesic area on the

@@ -185,7 +185,7 @@ SPECS["adm1"] = [
         ),
     )),
     # Outline compactness.
-    #   -> <0.05 103 | 0.05-0.15 364 | 0.15-0.30 980 | 0.30-0.50 1169
+    #   -> <0.05 103 | 0.05-0.15 363 | 0.15-0.30 981 | 0.30-0.50 1169
     #      | >=0.50 608
     ("compactness", "Outline compactness", polygon_style(
         "Outline compactness", "adm1.pmtiles", "adm1",
@@ -222,7 +222,7 @@ SPECS["adm2"] = [
         ),
     )),
     # Outline compactness.
-    #   -> <0.05 175 | 0.05-0.15 1218 | 0.15-0.30 8742 | 0.30-0.50 20754
+    #   -> <0.05 175 | 0.05-0.15 1218 | 0.15-0.30 8741 | 0.30-0.50 20755
     #      | >=0.50 18460
     ("compactness", "Outline compactness", polygon_style(
         "Outline compactness", "adm2.pmtiles", "adm2",

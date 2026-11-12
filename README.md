@@ -14,6 +14,12 @@ beside it.
 the authoritative source. This repository republishes it; it adds no boundaries
 and changes no geometry.
 
+> **This catalog is not a byte-for-byte mirror of geoBoundaries.** It repairs
+> faults in the upstream release and adds products geoBoundaries does not
+> publish. Every deviation is listed, with how to reproduce it and how to get
+> the vanilla behaviour, in
+> [docs/changes-from-upstream.md](docs/changes-from-upstream.md).
+
 ## What it publishes
 
 | collection | rows | GeoParquet | PMTiles |
@@ -22,6 +28,12 @@ and changes no geometry.
 | `adm1` | 3,224 | 76 MB, 51 row groups of 64 rows | 17 MB, z0-7 |
 | `adm2` | 49,349 | 101 MB, 97 row groups of 512 rows | 101 MB, z0-9 |
 | `names` | 52,398 | 3.6 MB, 35 row groups of 1,536 rows | 12 MB, z0-8 |
+
+`adm0` and `adm1` each carry a second GeoParquet file, `*_display.parquet`,
+with the same rows in the same order and the same row group boundaries, and
+geometry simplified and buffered outward: 7.4 MB and 13.3 MB against 96.6 MB
+and 75.0 MB. ADM2 has none, because its geometry is already simplified
+upstream and its median unit is 82 coordinates.
 
 The three boundary levels cover the globe seamlessly. `names` is a search
 sidecar: one row per named unit across all three levels, sorted by a folded
@@ -47,10 +59,12 @@ in a sibling directory, `../geoboundaries-staging`, which
 python3 tools/fetch_sources.py      # 547 MB of GeoPackages from upstream
 python3 tools/build_boundaries.py   # -> 3 GeoParquet files, ~70 s
 python3 tools/build_names.py        # -> the search index, ~5 s
+python3 tools/build_display.py      # -> 2 display sidecars, ~30 s
 python3 tools/build_pmtiles.py      # -> 4 PMTiles archives, ~12 min
 python3 tools/make_styles.py        # -> 15 style JSONs, into catalog/
 python3 tools/make_thumbnails.py    # -> 4 thumbnails, into catalog/
 python3 tools/make_collections.py   # -> 4 collection.json, into catalog/
+python3 tools/make_changes_doc.py   # -> the published deviation record
 ```
 
 Needs `ogr2ogr` (GDAL 3.10+), `tippecanoe`, `pmtiles`, and Python with
@@ -68,6 +82,7 @@ citing it are now wrong.
 |---|---|
 | `catalog/` | The published tree, synced 1:1 to object storage |
 | `catalog/*/.portolan/metadata.yaml` | Provenance and known issues per collection. Tracked, never published |
+| `docs/changes-from-upstream.md` | Every deviation from vanilla geoBoundaries. Copied into `catalog/` by `tools/make_changes_doc.py` |
 | `catalog.publish.yaml` | Where it publishes, and under what public URL |
 | `tools/` | The pipeline, and the publisher |
 | `tests/` | The gates CI runs on every pull request |
@@ -103,6 +118,7 @@ the same reason. Leave it unset only when the staging tree is mounted under
 |---|---|
 | `test_links.py` | Every relative link and asset href resolves |
 | `test_styles.py` | Every style class exists in the built data. Skips without the staging tree |
+| `test_changes_doc.py` | The published deviation record matches its source in `docs/` |
 | `test_publish.py` | Nothing outside `catalog/` can be uploaded |
 | `test_upload_data.py` | Only staged files with an allowed suffix upload |
 | `test_stac_valid.py` | Valid STAC 1.1.0, via `stac-check` |

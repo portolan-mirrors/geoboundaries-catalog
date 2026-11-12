@@ -143,23 +143,27 @@ relationship CGAZ publishes is `shapeGroup` to a country. Reconstructing the
 hierarchy requires a spatial join, and on simplified clipped geometry that
 misassigns units along shared edges.
 
-**25 names in this file are double-encoded upstream**, including all 16 Chilean
-regions: `RegiÃ³n de ValparaÃ­so` where `Región de Valparaíso` was meant, plus
-7 Portuguese districts and 2 Seychelles districts **[derived]**. `shapeName`
-carries them through unchanged, because this is a mirror. The
-[`names`](../names/collection.json) collection repairs them in its `name_norm`
-column, so the units stay findable:
+**24 names in this file were double-encoded upstream, and are repaired here**
+**[derived]**: all 16 Chilean regions, which geoBoundaries publishes as
+`RegiÃ³n de ValparaÃ­so` where `Región de Valparaíso` was meant, plus 6
+Portuguese and 2 Seychelles districts. `shapeName` carries the repaired text,
+not the upstream bytes, because a name nobody can type is a name nobody can
+find and this catalog's own search index is how the data is reached. The full
+before-and-after table is in
+[changes-from-upstream.md](../changes-from-upstream.md).
 
 ```sql
 SELECT count(*) FROM 'adm1/cgaz_adm1.parquet'
-WHERE shapeName LIKE '%Ã%' OR shapeName LIKE '%Å%' OR shapeName LIKE '%Ä%';
--- 25
+WHERE shapeName LIKE '%Ã%' OR shapeName LIKE '%â€%';
+-- 0
 ```
 
-**346 of the 3,224 geometries are not OGC-valid** **[derived]**, and the same
-346 fail on a direct conversion of the upstream GeoPackage, so the invalidity
-is upstream. Call `ST_MakeValid(geometry)` before any overlay, union or
-intersection. Drawing and bbox queries are unaffected.
+**346 of the 3,224 geometries were not OGC-valid upstream, and 345 are
+repaired here** **[derived]**. At most 0.0038 km2 of area was introduced, and
+exactly 0 on rows that were already valid. **One row is still invalid**:
+Kaafu (MDV), a four-point polygon of zero area that `ST_MakeValid` resolves to
+a line. Repairing it would delete the unit, so it is published as upstream has
+it. Everything else returns true from `ST_IsValid`.
 
 **Simplification collapses the smallest units.** Four rows measure under
 0.1 km2, and Kaafu in the Maldives measures 0.0 km2 from 4 vertices

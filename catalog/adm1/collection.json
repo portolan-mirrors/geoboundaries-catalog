@@ -9,7 +9,7 @@
   ],
   "id": "adm1",
   "title": "CGAZ ADM1 - First-Level Administrative Boundaries",
-  "description": "3,224 first-level administrative units worldwide (states, provinces, regions, governorates) from the geoBoundaries CGAZ composite, as GeoParquet 1.1 with bbox covering metadata and spatially sorted into 51 row groups of 64 rows. 3,202 rows are genuine first-level units; 20 are disputed areas and 2 are countries with no first-level breakdown, Antarctica and Vatican City, carried up so the composite stays seamless. Geometry is each country's geoBoundaries submission simplified to roughly a tenth of its vertices and clipped to US Department of State international boundaries. Read the [agent guide](AGENTS.md): `shapeType` is what tells you whether a row is really an ADM1 unit, and the composite publishes no key linking a unit to its parent country's subdivisions.",
+  "description": "3,224 first-level administrative units worldwide (states, provinces, regions, governorates) from the geoBoundaries CGAZ composite, as GeoParquet 1.1 with bbox covering metadata and spatially sorted into 51 row groups of 64 rows. 3,202 rows are genuine first-level units; 20 are disputed areas and 2 are countries with no first-level breakdown, Antarctica and Vatican City, carried up so the composite stays seamless. Geometry is each country's geoBoundaries submission simplified to roughly a tenth of its vertices and clipped to US Department of State international boundaries. Read the [agent guide](AGENTS.md): `shapeType` is what tells you whether a row is really an ADM1 unit, and the composite publishes no key linking a unit to its parent country's subdivisions. A second GeoParquet file, `cgaz_adm1_display.parquet`, carries the same rows in the same order with geometry simplified and buffered outward, 13 MB against 75, for drawing and for spatial filtering.",
   "license": "CC-BY-4.0",
   "keywords": [
     "administrative boundaries",
@@ -127,8 +127,8 @@
       "roles": [
         "data"
       ],
-      "file:size": 76157753,
-      "file:checksum": "1220c98f7bdcacdfd0786426f9a476b63e836c6439dd1423fc0e0d4b7e3be58ae3ac",
+      "file:size": 74997064,
+      "file:checksum": "122075b43bc46676b4ee23bcfe8cb50cdf1217eb300cfda2642cbb95fb23189e9ad5",
       "table:primary_geometry": "geometry"
     },
     "pmtiles": {
@@ -139,11 +139,25 @@
         "visual",
         "data"
       ],
-      "file:size": 17052595,
-      "file:checksum": "12202fe0899045c8dd4c62ea71ac44d395b547ed952b26ea2b10331c48eeb88e2ea6",
+      "file:size": 17053019,
+      "file:checksum": "1220875f636b78429b20d0fe012edb70a02ee2b7840b4f6229bcaa8118a2360421b5",
       "pmtiles:layers": [
         "adm1"
       ]
+    },
+    "display": {
+      "href": "./cgaz_adm1_display.parquet",
+      "type": "application/vnd.apache.parquet",
+      "title": "First-Level Administrative Boundaries, display and filter geometry (51 row groups of 64 rows, aligned with the data asset)",
+      "roles": [
+        "data",
+        "overview"
+      ],
+      "description": "The same rows in the same order and the same row group boundaries as the data asset, with geometry simplified and then buffered **outward** by the simplification tolerance, so the shape contains the true boundary rather than cutting inside it. Built for drawing an outline fast and for pre-filtering another dataset, where over-fetching is cheap and a missing edge feature is a wrong answer. Neighbouring units overlap in the margin. Do not measure area from it, do not use it to decide which side of a border a point falls on, and do not publish it as a boundary. See the [catalog agent guide](../AGENTS.md) and [changes-from-upstream.md](../changes-from-upstream.md).",
+      "file:size": 13273152,
+      "file:checksum": "12201f7c8306d137ea6312216f6867ac0b00580a77a61c038c493e4400898a73c637",
+      "table:primary_geometry": "geometry",
+      "table:row_count": 3224
     },
     "style-default": {
       "href": "./styles/default.json",
@@ -205,8 +219,8 @@
       "roles": [
         "thumbnail"
       ],
-      "file:size": 423179,
-      "file:checksum": "1220aff8e9eb6cb0dc0a9e0584f2f79975e8004fcf26a1d8bab84884d7fb51fd22f9"
+      "file:size": 423500,
+      "file:checksum": "12203b6e8a487e6a10e64192b682e3128fbe6a4b3fdb741d819aa708d0210806f3c6"
     }
   },
   "links": [

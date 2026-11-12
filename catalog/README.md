@@ -4,9 +4,16 @@ Every administrative boundary in the geoBoundaries **Comprehensive Global
 Administrative Zones** composite, republished as cloud-native GeoParquet and
 PMTiles you can query and draw without downloading anything.
 
-This is a **mirror**. [geoBoundaries](https://www.geoboundaries.org/), built by
-the community and [William & Mary geoLab](https://geolab.wm.edu/), produces the
-data and remains the authoritative source.
+[geoBoundaries](https://www.geoboundaries.org/), built by the community and
+[William & Mary geoLab](https://geolab.wm.edu/), produces the data and remains
+the authoritative source.
+
+> **This is not a byte-for-byte mirror.** It repairs faults in the upstream
+> release — 38 double-encoded names, 1,275 invalid geometries, a missing CRS —
+> and adds products geoBoundaries does not publish: a name search index and
+> simplified display geometry. Every deviation, with how to reproduce it and
+> how to get the vanilla behaviour instead, is in
+> **[changes-from-upstream.md](changes-from-upstream.md)**.
 
 ## What is here
 
@@ -35,7 +42,22 @@ a second, or resolve a typed prefix from one or two 101 KiB row groups by range
 request. It carries the `shapeID` that joins back to the geometry, the extent
 to fly a map to, and a count of how many other units share the same name.
 
-A PMTiles archive accompanies every collection, for drawing.
+A PMTiles archive accompanies every collection, for drawing many units at once.
+
+The `adm0` and `adm1` collections also carry a **display** file: the same rows
+in the same order with simplified geometry, for drawing one unit's outline
+without decoding a quarter of a megabyte of coordinates. Canada is 528,021
+coordinates at full resolution and 68,973 in the display file. There is no
+ADM2 display file, because ADM2 geometry is already simplified upstream — its
+median unit is 82 coordinates — and nothing there was slow.
+
+**The display geometry is buffered outward** by the distance it was simplified
+by, so it contains the true boundary rather than cutting inside it. That makes
+it safe to use as a spatial filter for downloading some *other* dataset: you
+over-fetch a little rather than silently dropping features along the edge.
+Every feature retains at least 99.87% of its original area. The cost is that
+neighbouring units overlap in the margin, so it is a display and filter shape,
+not a cartographic boundary. Do not measure area from it.
 
 Per-country geoBoundaries releases (`gbOpen`, `gbHumanitarian`,
 `gbAuthoritative`) are **not** mirrored here. Those are full-resolution and
@@ -119,6 +141,53 @@ The pipeline is five scripts, each runnable on its own:
 [build_pmtiles.py](https://github.com/portolan-mirrors/geoboundaries-catalog/blob/main/tools/build_pmtiles.py)
 and
 [make_styles.py](https://github.com/portolan-mirrors/geoboundaries-catalog/blob/main/tools/make_styles.py).
+
+## Using it from a browser
+
+This catalog is shaped for a static client with no server — the search half of
+a geocoder, running entirely on range requests. End to end:
+
+1. **Load the name index** when the search box takes focus. `names` is 3.6 MB
+   and reads in about 120 ms for the columns a search needs. Below about 5 MB
+   that is the right call; above it, the file is sorted so a typed prefix maps
+   to one or two 101 KiB row groups you can range-request instead.
+2. **Match the prefix** on `name_norm`, which is case-folded and
+   accent-stripped, so `zurich` finds `Zürich`. Rank on `area_km2`,
+   disambiguate with `name_dupes` and `country_name`.
+3. **Take `shape_id` and `level`** from the hit.
+4. **Draw the outline from the display file** at once, or move the camera from
+   the index's own `bbox`.
+5. **Fetch full resolution in the background** when the user is going to
+   export, clip or measure — one range request of 1 to 1.8 MB.
+6. **Use the boundary to filter another dataset.** This is what the outward
+   buffer is for.
+
+The runnable version of all of that, with the measured numbers and the join
+recipe, is in [AGENTS.md](AGENTS.md) and
+[names/AGENTS.md](names/AGENTS.md).
+
+## A sibling catalog
+
+[cn-geocoder-overture](https://github.com/portolan-mirrors/cn-geocoder-overture)
+is an **experimental** sibling built to the same shape from Overture Maps
+divisions. It goes below the second administrative level to cities and
+localities, and carries names in many languages where geoBoundaries carries
+one. A widget can be pointed at either index.
+
+**The deciding factor is the license.** This catalog is CC BY 4.0: attribution
+only, usable in a closed product as long as you credit geoBoundaries. Overture
+divisions carry ODbL, which is share-alike — a derived database has to be
+released under the same terms. Choose this one when attribution is the only
+obligation you want; choose Overture when you need the coverage and can live
+with share-alike.
+
+## Future work
+
+A global **ADM3/ADM4** composite is under evaluation. CGAZ stops at ADM2, but
+geoBoundaries' per-country `gbOpen` releases go deeper for some countries; a
+coverage survey is in progress. It would not be CGAZ, because there is no
+upstream composite at those levels, so the clipping and gap-filling would have
+to happen here. Nothing is promised.
 
 ## Read this before querying
 

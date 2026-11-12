@@ -54,6 +54,11 @@ can show "Zürich, Switzerland" without a second fetch. `shape_id`, the join key
 `area_km2`, a usable relevance weight. `name_dupes`, how many units share the
 name. `bbox`, the extent to fly a map to. And the point.
 
+> **Not a byte-for-byte mirror.** This catalog repairs faults in the upstream
+> release and adds products geoBoundaries does not publish. Every deviation,
+> with how to reproduce it and how to get the vanilla behaviour, is in
+> [changes-from-upstream.md](../changes-from-upstream.md).
+
 ## Known issues
 
 - **The join key depends on the level.** `shape_id` is NULL for all 218 level-0
@@ -66,10 +71,11 @@ name. `bbox`, the extent to fly a map to. And the point.
 - **A name is not an identifier.** 8,140 rows share their folded name with at
   least one other unit; 878 sit in a name shared by ten or more. 32 units fold
   to "washington". Use `name_dupes` to decide when to disambiguate.
-- **Display name and search name differ for 38 rows.** Those names are
-  double-encoded UTF-8 upstream. `name` carries the damage through, because
-  this is a mirror; `name_norm` carries the repaired, folded form so the unit
-  stays findable. An interface that shows `name` will show the mojibake.
+- **38 names are repaired rather than mirrored.** `name` carries the repaired
+  text, for example `Región de Valparaíso` where geoBoundaries publishes
+  `RegiÃ³n de ValparaÃ­so`, so display and search agree and no client has to
+  repeat the repair. The upstream bytes are preserved in the before-and-after
+  table in [changes-from-upstream.md](../changes-from-upstream.md).
 - **`country_name` is NULL for the 20 disputed areas.** They have no country to
   join to, and their `country` is a geoBoundaries code, not an ISO code.
 - **No parent names.** CGAZ publishes no key linking a second-level unit to the
