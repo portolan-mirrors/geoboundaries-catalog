@@ -103,15 +103,15 @@ serves either.
 End to end, with no server. The mechanics, with runnable code, are in
 [`names/AGENTS.md`](names/AGENTS.md); this is the shape of it.
 
-1. **At focus, load the index.** `names/cgaz_names.parquet` is 3.6 MB.
+1. **At focus, load the index.** `names/cgaz_names.parquet` is 3.9 MB.
    Measured on Node 22: the seven columns a search needs load in **117 ms**,
-   all eleven in **250 ms** **[derived]**. Below about 5 MB this is the right
+   all twelve in **250 ms** **[derived]**. Below about 5 MB this is the right
    call — one request, then every keystroke is local. Above that, or on a
    connection you do not trust, use the range-request path instead: the file
    is sorted by `name_norm`, so a typed prefix maps to a contiguous run of row
    groups. Over all 676 two-letter prefixes a prefix touches a **median of 1
-   and at most 3** of the 35 row groups, each about 101 KiB **[derived]**. The
-   footer plus page index is 86,596 bytes, inside hyparquet's 512 KiB default
+   and at most 3** of the 35 row groups, each about 109 KiB **[derived]**. The
+   footer plus page index is ~107,000 bytes, inside hyparquet's 512 KiB default
    prefetch, so one request plans the rest.
 2. **Search the prefix.** Match on `name_norm`, which is case-folded and
    accent-stripped, so `zurich` finds `Zürich`. Rank with `area_km2` and

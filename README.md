@@ -27,7 +27,7 @@ and changes no geometry.
 | `adm0` | 218 | 97 MB, 55 row groups of 4 rows | 7.1 MB, z0-6 |
 | `adm1` | 3,224 | 76 MB, 51 row groups of 64 rows | 17 MB, z0-7 |
 | `adm2` | 49,349 | 101 MB, 97 row groups of 512 rows | 101 MB, z0-9 |
-| `names` | 52,398 | 3.6 MB, 35 row groups of 1,536 rows | 12 MB, z0-8 |
+| `names` | 52,398 | 3.9 MB, 35 row groups of 1,536 rows | 12 MB, z0-8 |
 
 `adm0` and `adm1` each carry a second GeoParquet file, `*_display.parquet`,
 with the same rows in the same order and the same row group boundaries, and

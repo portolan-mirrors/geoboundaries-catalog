@@ -31,6 +31,31 @@ belongs to, which is the rule ``shapeType`` already encodes:
 
 Rows with no ``shapeName`` are not indexed, because there is nothing to search
 for. There are 37 of them, all in the ADM2 file.
+
+``geometry_ref`` -- the ``select()`` fast path
+-----------------------------------------------
+Every row also carries ``geometry_ref``, a ``{file, row_group, row}`` pointer
+into that level's full-resolution boundary file (design doc §6.2/§6.4). The
+``row`` is the physical row offset the unit sits at in ``cgaz_adm{level}
+.parquet``, captured with DuckDB's ``file_row_number`` option on
+``read_parquet`` straight off the published file this script reads -- not
+recomputed or assumed from any join -- so it is exactly the row a client's
+range-read will land on. ``row_group`` is that offset floor-divided by the
+level's fixed row group size (``gbcommon.ROW_GROUP_ROWS``: 4 for ADM0, 64 for
+ADM1, 512 for ADM2), which is also what ``tools/build_boundaries.py`` writes
+the file with.
+
+The boundary files are Hilbert-sorted, not sorted by ``(country, shapeID)``,
+so this reference is **advisory**, never authoritative: a client must verify
+the row it reads still carries the expected join key (``shapeID``, or
+``shapeGroup`` at level 0, since CGAZ ADM0 has no ``shapeID`` column at all)
+and fall back to scanning candidate row groups by statistics on any mismatch.
+That is what makes it safe against a version-skewed boundary file, per design
+doc §6.4. Because the display files are row-aligned with the full files at
+every level that has one (verified directly: same row, same ``shapeID``/
+``shapeGroup``, for all of ADM0 and ADM1), the same ``row``/``row_group`` pair
+is valid against either file -- a client need not special-case which
+resolution it is fetching.
 """
 from __future__ import annotations
 
@@ -47,6 +72,7 @@ from gbcommon import (
     shrink_bbox_float32,
     NAMES_ROW_GROUP_ROWS,
     PUBLISH,
+    ROW_GROUP_ROWS,
     ZSTD_LEVEL,
     geo_metadata,
     normalize_name,
@@ -58,24 +84,33 @@ OUT = OUT_DIR / "cgaz_names.parquet"
 
 SQL = """
 INSTALL spatial; LOAD spatial;
-WITH a0 AS (SELECT * FROM read_parquet('{a0}')),
-     a1 AS (SELECT * FROM read_parquet('{a1}')),
-     a2 AS (SELECT * FROM read_parquet('{a2}')),
+WITH a0 AS (
+       SELECT * EXCLUDE (file_row_number), file_row_number AS row_index
+       FROM read_parquet('{a0}', file_row_number=true)
+     ),
+     a1 AS (
+       SELECT * EXCLUDE (file_row_number), file_row_number AS row_index
+       FROM read_parquet('{a1}', file_row_number=true)
+     ),
+     a2 AS (
+       SELECT * EXCLUDE (file_row_number), file_row_number AS row_index
+       FROM read_parquet('{a2}', file_row_number=true)
+     ),
      countries AS (
        SELECT shapeGroup, shapeName AS country_name
        FROM a0 WHERE shapeType = 'ADM0'
      ),
      picked AS (
        SELECT 0::TINYINT AS level, shapeName AS name, NULL::VARCHAR AS shape_id,
-              shapeGroup, shapeType AS shape_type, area_km2, geometry
+              shapeGroup, shapeType AS shape_type, area_km2, geometry, row_index
        FROM a0 WHERE shapeType IN ('ADM0', 'DISP') AND shapeName IS NOT NULL
        UNION ALL
        SELECT 1::TINYINT, shapeName, shapeID,
-              shapeGroup, shapeType, area_km2, geometry
+              shapeGroup, shapeType, area_km2, geometry, row_index
        FROM a1 WHERE shapeType = 'ADM1' AND shapeName IS NOT NULL
        UNION ALL
        SELECT 2::TINYINT, shapeName, shapeID,
-              shapeGroup, shapeType, area_km2, geometry
+              shapeGroup, shapeType, area_km2, geometry, row_index
        FROM a2 WHERE shapeType = 'ADM2' AND shapeName IS NOT NULL
      )
 SELECT
@@ -90,6 +125,30 @@ SELECT
     xmin: ST_XMin(p.geometry), ymin: ST_YMin(p.geometry),
     xmax: ST_XMax(p.geometry), ymax: ST_YMax(p.geometry)
   }} AS bbox,
+  -- Advisory select() fast path (design doc §6.2/§6.4; see the module
+  -- docstring above). `row_index` is the physical offset this exact row
+  -- sits at in the published cgaz_adm{{level}}.parquet, captured via
+  -- read_parquet(..., file_row_number=true) above -- never recomputed from
+  -- a join, so it cannot drift from what a range-read will actually land
+  -- on. `row_group` is that offset floor-divided by the level's fixed row
+  -- group size (gbcommon.ROW_GROUP_ROWS).
+  CASE p.level
+    WHEN 0 THEN {{
+      file: 'cgaz_adm0.parquet'::VARCHAR,
+      row_group: (p.row_index // {rg0})::INTEGER,
+      row: p.row_index::BIGINT
+    }}
+    WHEN 1 THEN {{
+      file: 'cgaz_adm1.parquet'::VARCHAR,
+      row_group: (p.row_index // {rg1})::INTEGER,
+      row: p.row_index::BIGINT
+    }}
+    WHEN 2 THEN {{
+      file: 'cgaz_adm2.parquet'::VARCHAR,
+      row_group: (p.row_index // {rg2})::INTEGER,
+      row: p.row_index::BIGINT
+    }}
+  END AS geometry_ref,
   ST_AsWKB(ST_PointOnSurface(p.geometry)) AS geometry
 FROM picked p
 LEFT JOIN countries c ON p.shapeGroup = c.shapeGroup
@@ -105,7 +164,12 @@ def main() -> int:
             sys.exit(f"missing {path}; run tools/build_boundaries.py first")
 
     con = duckdb.connect()
-    table = con.execute(SQL.format(a0=a0, a1=a1, a2=a2)).to_arrow_table()
+    table = con.execute(
+        SQL.format(
+            a0=a0, a1=a1, a2=a2,
+            rg0=ROW_GROUP_ROWS[0], rg1=ROW_GROUP_ROWS[1], rg2=ROW_GROUP_ROWS[2],
+        )
+    ).to_arrow_table()
     con.close()
 
     # The boundary collections already carry repaired names, so this is an
@@ -140,7 +204,7 @@ def main() -> int:
     # name_norm straight after name, so the file reads the way it sorts.
     order = [
         "name", "name_norm", "level", "shape_type", "country", "country_name",
-        "shape_id", "area_km2", "name_dupes", "bbox", "geometry",
+        "shape_id", "area_km2", "name_dupes", "bbox", "geometry_ref", "geometry",
     ]
     table = table.select(order)
 

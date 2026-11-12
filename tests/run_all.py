@@ -20,6 +20,7 @@ TESTS = [
     "test_upload_data.py",
     "test_stac_valid.py",
     "test_conformance.py",
+    "test_index_refs.py",
 ]
 
 failed = []

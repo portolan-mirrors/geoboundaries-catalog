@@ -21,7 +21,7 @@ can turn a typed name into a `shapeID`, a bbox and a point. Public root:
 `https://data.source.coop/portolan-mirrors/geoboundaries-catalog/catalog.json`
 
 ```
-names/cgaz_names.parquet   3.6 MB, 52,398 rows, 35 row groups of 1,536 rows
+names/cgaz_names.parquet   3.9 MB, 52,398 rows, 35 row groups of 1,536 rows
 names/names.pmtiles        12 MB, zoom 0-8, layer "names"
 ```
 
@@ -68,11 +68,14 @@ short **[derived]**.
 ## Layout and how to exploit it
 
 The file is sorted by `(name_norm, level, country)` and written in **35 row
-groups of 1,536 rows**, about 101 KiB each, with a Parquet page index on every
+groups of 1,536 rows**, about 109 KiB each, with a Parquet page index on every
 column. The row group size targets bytes, not rows: at 69 compressed bytes per
-row, 1,536 rows lands inside the 100-150 KiB band where a prefix lookup is a
-single small range request. Doubling the group size doubles both the latency
-and the bytes fetched.
+row *of the seven search columns* (the budget `NAMES_ROW_GROUP_ROWS` was tuned
+against), 1,536 rows lands inside the 100-150 KiB band where a prefix lookup
+is a single small range request. Doubling the group size doubles both the
+latency and the bytes fetched. `geometry_ref` (below) added about 8 KiB per
+row group on top of that -- it does not change the row group count or the
+prefix-lookup byte budget, because a prefix search never reads it.
 
 Because the file is sorted, row group statistics on `name_norm` are tight,
 non-overlapping alphabetical ranges **[derived]**:
@@ -92,23 +95,22 @@ File geometry, for a client that plans its reads:
 
 | | bytes |
 |---|---|
-| whole file | 3,623,011 |
-| Parquet footer | 60,974 |
-| page index region | 25,614 |
-| footer + page index | 86,596 |
-| one row group, all columns | ~103,500 |
-| one row group, the 7 search columns | ~45,600 |
+| whole file | 3,895,531 |
+| footer + page index (approx, measured as whole-file minus the sum of every column chunk's compressed size) | ~107,000 |
+| one row group, all columns (approx) | ~110,500 |
+| one row group, the 7 search columns (approx) | ~45,600 |
+| one row group, `geometry_ref` alone (approx) | ~7,000 |
 
 ## Two ways to use it
 
 ### (a) Full load — the intended path
 
-At 3.6 MB this is the primary consumption mode. Browser clients read it with
+At 3.9 MB this is the primary consumption mode. Browser clients read it with
 [hyparquet](https://github.com/hyparam/hyparquet) plus
 [hyparquet-compressors](https://github.com/hyparam/hyparquet-compressors),
 which is required because every column chunk is **ZSTD** and hyparquet ships no
 zstd codec of its own **[derived]**. hyparquet's default footer prefetch is
-512 KiB, and this file's footer plus page index is 86,596 bytes, so one
+512 KiB, and this file's footer plus page index is ~107,000 bytes, so one
 prefetch has everything it needs to plan **[derived]**.
 
 Measured on Node 22 against the built file:
@@ -205,6 +207,7 @@ Zürich  Switzerland  2  2    93
 | `area_km2` | DOUBLE | The unit's geodesic area, copied from its boundary row | derived |
 | `name_dupes` | INTEGER | How many rows in this index share this `name_norm` | derived |
 | `bbox` | STRUCT | xmin, ymin, xmax, ymax as **FLOAT32**, rounded outward | derived |
+| `geometry_ref` | STRUCT\<file, row_group, row\> | Advisory `select()` fast path into the boundary file. **Never authoritative; verify before trusting it** — see below | derived |
 | `geometry` | BLOB (WKB) | Point inside the unit, CRS84. Not the unit's shape | derived |
 
 ### How `name_norm` is built
@@ -290,10 +293,63 @@ FROM hit h JOIN 'adm0/cgaz_adm0.parquet' b ON h.country = b.shapeGroup
 WHERE h.level = 0;
 ```
 
-In a browser, do not join at all: take `shape_id` and `level` from the hit,
-then range-read the one row group of the right boundary file that the `bbox`
-covering column points at. That is why the boundary files have small row
-groups.
+In a browser, do not join at all: take `geometry_ref` from the hit and
+range-read the one row group it names. That is why the boundary files have
+small row groups, and it is also why `geometry_ref` exists.
+
+### The `geometry_ref` fast path, and why it must be verified
+
+`geometry_ref` is a `{file, row_group, row}` struct. `row` is the physical
+row offset the unit sits at in `cgaz_adm{level}.parquet`, captured directly
+off that published file — not recomputed from a join — so it always names a
+real row. `row_group` is `row` floor-divided by the level's row group size
+(`4` for ADM0, `64` for ADM1, `512` for ADM2 — published in
+[`names/index.json`](index.json)'s `boundaries[].row_group_rows`, which a
+client should read rather than hardcode). Because the display file is
+row-aligned with the full file at every level that has one (same row, same
+`shapeID`/`shapeGroup`, verified directly for ADM0 and ADM1), the identical
+`row`/`row_group` pair resolves against either file:
+
+```sql
+SELECT name, level, geometry_ref FROM 'names/cgaz_names.parquet'
+WHERE name_norm = 'zurich' AND level = 1;
+```
+```
+Zürich  1  {file: cgaz_adm1.parquet, row_group: 29, row: 1891}
+```
+
+```js
+const hit = { level: 1, shapeId: '...', geometryRef: { rowGroup: 29, row: 1891 } }
+const part = await parquetReadObjects({
+  file, metadata,  // of adm1/cgaz_adm1_display.parquet
+  columns: ['shapeID', 'geometry'],
+  rowStart: hit.geometryRef.row, rowEnd: hit.geometryRef.row + 1,
+  // or, to fetch the whole row group at once: use the row_group's own
+  // byte range from metadata.row_groups[hit.geometryRef.rowGroup]
+})
+if (part[0].shapeID !== hit.shapeId) {
+  // STOP: the boundary file has drifted from this names index (a rebuild,
+  // a version skew, a stale cache). Fall back to the stats-pruning scan
+  // below instead of trusting part[0].geometry.
+} else {
+  // part[0].geometry is the unit's outline.
+}
+```
+
+**Why the verification step is not optional.** The boundary files are
+Hilbert-sorted (`tools/build_boundaries.py`), not sorted by
+`(country, shapeID)`, so nothing about this catalog's own layout guarantees
+`geometry_ref` stays valid if the boundary file is ever rebuilt from a
+different upstream commit without rebuilding the names index in the same
+pass, or if a client holds a cached names index against a newer boundary
+file (or vice versa). `geometry_ref` only ever *saves a scan*; it never
+substitutes for checking that the row it names still holds the expected
+`shapeID` (or `shapeGroup` at level 0, since CGAZ ADM0 has no `shapeID`
+column at all). A client that skips the check and the pointer has drifted
+gets **a different unit's polygon**, with a plausible bbox and valid
+geometry — nothing about the response looks wrong. On a mismatch, fall back
+to pruning candidate row groups by `country`/`shapeID` statistics (the
+pre-`geometry_ref` method below) and scan them for the exact row.
 
 ### Which boundary file to range-read
 

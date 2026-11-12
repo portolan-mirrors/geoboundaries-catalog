@@ -24,7 +24,7 @@ Four collections.
 | `adm0` | 218 | 97 MB | Country outlines, plus 20 disputed areas |
 | `adm1` | 3,224 | 76 MB | States, provinces, regions, governorates |
 | `adm2` | 49,349 | 101 MB | Counties, districts, municipalities, communes |
-| `names` | 52,398 | 3.6 MB | A name search index across all three levels |
+| `names` | 52,398 | 3.9 MB | A name search index across all three levels |
 
 The three boundary levels cover the globe seamlessly: every one of the 218
 country codes appears at every level, because where a country has no
@@ -37,8 +37,8 @@ so a client can fetch one unit's geometry in a range request of about 1 to
 1.8 MB instead of pulling the whole file.
 
 `names` is the piece built for autocomplete: one row per named unit, sorted by
-a folded form of the name, 3.6 MB in total. Load it whole in about a quarter of
-a second, or resolve a typed prefix from one or two 101 KiB row groups by range
+a folded form of the name, 3.9 MB in total. Load it whole in about a quarter of
+a second, or resolve a typed prefix from one or two 109 KiB row groups by range
 request. It carries the `shapeID` that joins back to the geometry, the extent
 to fly a map to, and a count of how many other units share the same name.
 
@@ -147,10 +147,10 @@ and
 This catalog is shaped for a static client with no server — the search half of
 a geocoder, running entirely on range requests. End to end:
 
-1. **Load the name index** when the search box takes focus. `names` is 3.6 MB
+1. **Load the name index** when the search box takes focus. `names` is 3.9 MB
    and reads in about 120 ms for the columns a search needs. Below about 5 MB
    that is the right call; above it, the file is sorted so a typed prefix maps
-   to one or two 101 KiB row groups you can range-request instead.
+   to one or two 109 KiB row groups you can range-request instead.
 2. **Match the prefix** on `name_norm`, which is case-folded and
    accent-stripped, so `zurich` finds `Zürich`. Rank on `area_km2`,
    disambiguate with `name_dupes` and `country_name`.
@@ -215,7 +215,7 @@ LIMIT 10;
 ```
 
 ```sql
--- Autocomplete, from the 3.6 MB index
+-- Autocomplete, from the 3.9 MB index
 SELECT name, country_name, level, name_dupes
 FROM 'https://data.source.coop/portolan-mirrors/geoboundaries-catalog/names/cgaz_names.parquet'
 WHERE name_norm LIKE 'zurich%'

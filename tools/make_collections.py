@@ -351,15 +351,16 @@ SPECS: list[dict] = [
         "description": (
             "A search sidecar, not a boundary dataset: one row per named "
             "administrative unit across all three CGAZ levels, 52,398 rows in "
-            "3.6 MB, sorted by a folded form of the name. The sort is the "
+            "3.9 MB, sorted by a folded form of the name. The sort is the "
             "whole design. The intended use is to load the file whole, which "
             "at this size takes a couple of hundred milliseconds in a "
             "browser; row group statistics on `name_norm` are tight, "
             "non-overlapping alphabetical ranges, so a client that will not "
-            "load 3.6 MB can instead resolve a typed prefix from one or two "
-            "101 KiB row groups by HTTP range request. Each row carries the "
+            "load 3.9 MB can instead resolve a typed prefix from one or two "
+            "109 KiB row groups by HTTP range request. Each row carries the "
             "`shapeID` that joins it back to the boundary collection for its "
-            "level, a bbox to fly a map to, a point inside the unit, and how "
+            "level, a bbox to fly a map to, a point inside the unit, a "
+            "geometry_ref fast-path pointer into that boundary file, and how "
             "many other units share the same name. The [agent guide](AGENTS.md) "
             "has both lookup recipes and the join back to geometry."
         ),
@@ -486,6 +487,31 @@ SPECS: list[dict] = [
                     "joined rows have a bbox narrower than their true extent. "
                     "Precision is about 1e-5 degrees, roughly a metre. The "
                     "boundary collections keep float64."
+                ),
+            },
+            {
+                "name": "geometry_ref",
+                "type": "struct",
+                "description": (
+                    "Derived, and advisory, never authoritative. A "
+                    "{file, row_group, row} pointer straight into this "
+                    "row's level's full-resolution boundary file: `row` is "
+                    "the physical row offset the unit sits at in "
+                    "`cgaz_adm{level}.parquet`, captured directly off that "
+                    "published file (not recomputed from any join), and "
+                    "`row_group` is that offset floor-divided by the "
+                    "level's fixed row group size (4/64/512, see "
+                    "names/index.json `boundaries[].row_group_rows`). "
+                    "Because the boundary files are Hilbert-sorted rather "
+                    "than sorted by (country, shapeID), a client must "
+                    "verify the row it reads still carries the expected "
+                    "join key (shapeID, or shapeGroup at level 0) and fall "
+                    "back to scanning candidate row groups by statistics on "
+                    "any mismatch -- that check is what makes the pointer "
+                    "safe against a rebuilt or version-skewed boundary "
+                    "file. The display file is row-aligned with the full "
+                    "file at every level that has one, so the same pointer "
+                    "resolves against either."
                 ),
             },
             {
@@ -654,6 +680,38 @@ def build(spec: dict) -> dict:
             "roles": ["thumbnail"],
             "file:size": thumb.stat().st_size,
             "file:checksum": checksum(thumb),
+        }
+
+    # The geocoder index manifest (design doc §6.4) sits beside the data
+    # asset only for the names collection today -- a hand-maintained file,
+    # not generated here, because its `boundaries[]` entries and `notes`
+    # carry facts (feature_id columns, row_group_rows, the geometry_ref
+    # fast-path contract, the level-0 country join) this script has no
+    # other source for. It still has to be *listed* as an asset with a
+    # live size/checksum, so every edit to it is picked up automatically
+    # by presence alone, rather than a per-collection flag that can go
+    # stale.
+    manifest_path = out_dir / "index.json"
+    if manifest_path.exists():
+        assets["index-manifest"] = {
+            "href": "./index.json",
+            "type": "application/json",
+            "title": "Index manifest for the geocoder (cnmw-index/1.0)",
+            "roles": ["metadata"],
+            "file:size": manifest_path.stat().st_size,
+            "file:checksum": checksum(manifest_path),
+            "description": (
+                "The kilobyte a client fetches before the index: its size, "
+                "row group count, checksum, catalog version, the URL, row "
+                "count and row_group_rows of every boundary and display "
+                "file, and the attribution each one requires with a "
+                "share_alike flag. row_group_rows is what a client "
+                "combines with a names-index row's geometry_ref to range-"
+                "read exactly one row group of the boundary file instead "
+                "of scanning candidates by statistics. Also documents the "
+                "level-0 join (country/shapeGroup, no shapeID) and the "
+                "absent cnmw:catalog_version footer metadata."
+            ),
         }
 
     links = [

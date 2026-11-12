@@ -9,7 +9,7 @@
   ],
   "id": "names",
   "title": "CGAZ Name Search Index",
-  "description": "A search sidecar, not a boundary dataset: one row per named administrative unit across all three CGAZ levels, 52,398 rows in 3.6 MB, sorted by a folded form of the name. The sort is the whole design. The intended use is to load the file whole, which at this size takes a couple of hundred milliseconds in a browser; row group statistics on `name_norm` are tight, non-overlapping alphabetical ranges, so a client that will not load 3.6 MB can instead resolve a typed prefix from one or two 101 KiB row groups by HTTP range request. Each row carries the `shapeID` that joins it back to the boundary collection for its level, a bbox to fly a map to, a point inside the unit, and how many other units share the same name. The [agent guide](AGENTS.md) has both lookup recipes and the join back to geometry.",
+  "description": "A search sidecar, not a boundary dataset: one row per named administrative unit across all three CGAZ levels, 52,398 rows in 3.9 MB, sorted by a folded form of the name. The sort is the whole design. The intended use is to load the file whole, which at this size takes a couple of hundred milliseconds in a browser; row group statistics on `name_norm` are tight, non-overlapping alphabetical ranges, so a client that will not load 3.9 MB can instead resolve a typed prefix from one or two 109 KiB row groups by HTTP range request. Each row carries the `shapeID` that joins it back to the boundary collection for its level, a bbox to fly a map to, a point inside the unit, a geometry_ref fast-path pointer into that boundary file, and how many other units share the same name. The [agent guide](AGENTS.md) has both lookup recipes and the join back to geometry.",
   "license": "CC-BY-4.0",
   "keywords": [
     "geocoding",
@@ -116,6 +116,11 @@
       "description": "GeoParquet 1.1 bbox covering struct, xmin, ymin, xmax, ymax in CRS84: the unit's full extent, copied from its boundary row. This is what to fly a map to after a hit. Stored as float32 rather than float64 to halve what it costs in a file meant to be loaded whole, with every bound rounded outward so the box still contains the unit. Verified against the ADM2 collection: 0 of 48,978 joined rows have a bbox narrower than their true extent. Precision is about 1e-5 degrees, roughly a metre. The boundary collections keep float64."
     },
     {
+      "name": "geometry_ref",
+      "type": "struct",
+      "description": "Derived, and advisory, never authoritative. A {file, row_group, row} pointer straight into this row's level's full-resolution boundary file: `row` is the physical row offset the unit sits at in `cgaz_adm{level}.parquet`, captured directly off that published file (not recomputed from any join), and `row_group` is that offset floor-divided by the level's fixed row group size (4/64/512, see names/index.json `boundaries[].row_group_rows`). Because the boundary files are Hilbert-sorted rather than sorted by (country, shapeID), a client must verify the row it reads still carries the expected join key (shapeID, or shapeGroup at level 0) and fall back to scanning candidate row groups by statistics on any mismatch -- that check is what makes the pointer safe against a rebuilt or version-skewed boundary file. The display file is row-aligned with the full file at every level that has one, so the same pointer resolves against either."
+    },
+    {
       "name": "geometry",
       "type": "geometry",
       "description": "Derived. A Point as WKB in CRS84, from ST_PointOnSurface of the unit's polygon, so it is guaranteed to fall inside the unit rather than outside it the way a centroid can. Use it for a marker, not as the unit's geometry."
@@ -129,20 +134,9 @@
       "roles": [
         "data"
       ],
-      "file:size": 3622968,
-      "file:checksum": "1220e106ba4871c66de23e563e77055febab5c6740e564c7bc45e1cde35805c6c9af",
+      "file:size": 3895531,
+      "file:checksum": "122054d1074504e60c4141dde7d9f28110b326bcc7ee9272cc7c865bdd63b2b50b1d",
       "table:primary_geometry": "geometry"
-    },
-    "index-manifest": {
-      "href": "./index.json",
-      "type": "application/json",
-      "title": "Index manifest for the geocoder (cnmw-index/1.0)",
-      "roles": [
-        "metadata"
-      ],
-      "file:size": 5965,
-      "file:checksum": "122005fec225a38a077c01820ef5d04da85cca06247b677df784a450cb0ee4a654d5",
-      "description": "The kilobyte a client fetches before the index: its size, row group count, checksum, catalog version, the URL and row count of every boundary and display file, and the attribution each one requires with a share_alike flag. Also documents the level-0 join (country/shapeGroup, no shapeID) and the absent cnmw:catalog_version footer metadata."
     },
     "pmtiles": {
       "href": "./names.pmtiles",
@@ -198,6 +192,17 @@
       ],
       "file:size": 186159,
       "file:checksum": "1220ea8326696b66e1d53f778436314733dc1a26a3f5f907a61727f3c62879c0afe7"
+    },
+    "index-manifest": {
+      "href": "./index.json",
+      "type": "application/json",
+      "title": "Index manifest for the geocoder (cnmw-index/1.0)",
+      "roles": [
+        "metadata"
+      ],
+      "file:size": 7426,
+      "file:checksum": "122036a505661012da827731d9101ebc2ace67bd8b4c42a75084d2adacec7b84c5f3",
+      "description": "The kilobyte a client fetches before the index: its size, row group count, checksum, catalog version, the URL, row count and row_group_rows of every boundary and display file, and the attribution each one requires with a share_alike flag. row_group_rows is what a client combines with a names-index row's geometry_ref to range-read exactly one row group of the boundary file instead of scanning candidates by statistics. Also documents the level-0 join (country/shapeGroup, no shapeID) and the absent cnmw:catalog_version footer metadata."
     }
   },
   "links": [
