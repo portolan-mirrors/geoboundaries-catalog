@@ -33,7 +33,14 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 from publish import load_config  # noqa: E402
 
-ACCEPTED: set[str] = set()
+# PTL-LIV-004 / PTL-LIV-005: github.com's hosting of the upstream source-gpkg
+# provenance link (adm0/collection.json assets.source-gpkg), not a consumption
+# asset this catalog hosts. Only surfaces under `rashid check --live`, which
+# this gate does not pass (it runs --no-data and no --live), but the ids are
+# listed here per docs/conformance.md's convention of listing a deviation in
+# both places. See docs/conformance.md "Accepted deviations" for the finding
+# text and how to reproduce it.
+ACCEPTED: set[str] = {"PTL-LIV-004", "PTL-LIV-005"}
 
 config = load_config()
 target = ROOT / config["publish_dir"]

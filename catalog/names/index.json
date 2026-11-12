@@ -1,0 +1,72 @@
+{
+  "spec": "cnmw-index/1.0",
+  "source": "geoboundaries-cgaz",
+  "index_version": "2026-11-12T00:00:00Z",
+  "catalog_version": "geoboundaries-cgaz-2026-11-12",
+  "rows": 52398,
+  "levels": [0, 1, 2],
+  "stats_truncated": false,
+  "dropped_unnamed": 37,
+  "index": {
+    "url": "./cgaz_names.parquet",
+    "size": 3622968,
+    "checksum": "1220e106ba4871c66de23e563e77055febab5c6740e564c7bc45e1cde35805c6c9af",
+    "row_groups": 35,
+    "sorted_by": ["name_norm", "level", "country"]
+  },
+  "boundaries": [
+    {
+      "level": 0,
+      "feature_id_column": null,
+      "index_key_column": "country",
+      "country_column": "shapeGroup",
+      "geometry_column": "geometry",
+      "full": {
+        "url": "../adm0/cgaz_adm0.parquet",
+        "size": 96593435,
+        "row_count": 218
+      },
+      "display": {
+        "url": "../adm0/cgaz_adm0_display.parquet",
+        "size": 7374831,
+        "row_count": 218
+      }
+    },
+    {
+      "level": 1,
+      "feature_id_column": "shapeID",
+      "country_column": "shapeGroup",
+      "geometry_column": "geometry",
+      "full": {
+        "url": "../adm1/cgaz_adm1.parquet",
+        "size": 74997064,
+        "row_count": 3224
+      },
+      "display": {
+        "url": "../adm1/cgaz_adm1_display.parquet",
+        "size": 13273152,
+        "row_count": 3224
+      }
+    },
+    {
+      "level": 2,
+      "feature_id_column": "shapeID",
+      "country_column": "shapeGroup",
+      "geometry_column": "geometry",
+      "full": {
+        "url": "../adm2/cgaz_adm2.parquet",
+        "size": 100448329,
+        "row_count": 49349
+      }
+    }
+  ],
+  "attribution": [
+    {
+      "text": "Boundaries: geoBoundaries CGAZ. Runfola, D., Anderson, A., Baier, H., et al. (2020). geoBoundaries: A global database of political administrative boundaries. PLoS ONE 15(4): e0231866. https://doi.org/10.1371/journal.pone.0231866",
+      "license": "CC-BY-4.0",
+      "url": "https://www.geoboundaries.org/",
+      "share_alike": false
+    }
+  ],
+  "notes": "LIVE catalog mirror (portolan-mirrors/geoboundaries-catalog), not provisional. Three admin levels: 218 ADM0 units (198 country + 20 disputed-area DISP polygons), 3,224 ADM1 units, 49,349 ADM2-level boundary rows (of which 48,978 carry a name; the other 371 are ADM1/ADM0 rows carried down to fill ADM2 coverage, per the catalog's names/AGENTS.md -- those are never indexed, independent of the 37 dropped_unnamed below). `dropped_unnamed: 37` counts ADM2 rows whose upstream shapeName is NULL (24 Japan, 12 Turkmenistan, 1 China) and so cannot be found by name; they exist with geometry in adm2/cgaz_adm2.parquet. Level 0 (ADM0 + DISP) has no `shapeID` column at all in the CGAZ source -- not just null values, the column is absent from adm0/cgaz_adm0*.parquet's schema -- so `feature_id_column` is null for level 0 and `index_key_column: \"country\"` names which names-index column is the join key instead; it is matched against the boundary file's `country_column` (`shapeGroup`), which is the same ISO-3166-1-alpha-3 (or geoBoundaries disputed-area code) value the names index stores in its own `country` column. Every level has a `country_column` (`shapeGroup`) available for the two-level narrowing described in the design doc (`select()`'s resolution order); at level 0 it is also the join column itself. Levels 1 and 2 default `index_key_column` to `feature_id` (omitted here) and join on `feature_id_column: \"shapeID\"`. Level 2 has no `display` entry on purpose: its median unit is 82 coordinates (catalog AGENTS.md, adm2/AGENTS.md), so nothing there is slow and a second file would only add a fetch; geocoder-core's `resolveResolutionMode` falls back to `full` for level 2's `display`/`both` requests, which is correct and fast at this size. `bbox` on the names index is float32, rounded outward (never narrower than the true extent) -- see §6.2 amendment. None of the published parquet files (index or boundary) currently carry a `cnmw:catalog_version` footer key-value entry; `catalog_version` here is asserted from the catalog's own publish record (catalog.json `updated`), not cross-checked against parquet footer metadata. geocoder-core's version-skew check (design doc §6.4) is therefore inert against this catalog today -- it neither errors nor warns, because `handle.catalogVersion` reads back `null` -- rather than silently wrong; feature identity is still safe because resolution always re-locates the row by key (shapeID, or shapeGroup at level 0) and never by a cached row offset. Boundary files are NOT globally sorted by (country, feature_id) the way design doc §6.4 requests of the E2 mirror -- they are sorted by this catalog's own build order (AGENTS.md's `country_units`/compactness-oriented layout), so `country_column`/`feature_id_column` row-group statistics still narrow the candidate set (verified non-trivially) but not to a single group the way a fully sorted mirror would; correctness does not depend on the sort, because resolution falls back to scanning every candidate group and the exact match is a linear scan within each, but a client's per-select byte cost is higher than a globally-sorted mirror would need. See catalog AGENTS.md and the per-collection AGENTS.md files for the full facts this manifest was built from."
+}

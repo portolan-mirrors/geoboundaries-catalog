@@ -34,7 +34,28 @@ something.
 
 ## Accepted deviations
 
-None.
+| Rule | Where | Why accepted | Tracking |
+|---|---|---|---|
+| PTL-LIV-004 | `adm0/collection.json` `assets.source-gpkg.href` (github.com) | `Access-Control-Expose-Headers` on `github.com`'s redirect omits `Content-Type, Content-Length, Content-Range, Accept-Ranges, ETag`. This is the upstream GeoPackage's *provenance* link (role `source`), served by `github.com`'s own `raw` endpoint (redirecting to `media.githubusercontent.com`), not a consumption asset this catalog hosts or controls. The catalog's own data assets (`.parquet`, `.pmtiles`) are on `data.source.coop` and pass this check. | upstream: not ours to fix |
+| PTL-LIV-005 | `adm0/collection.json` `assets.source-gpkg.href` (github.com) | Same host, same link: CORS preflight on `github.com`'s redirect target returns 404 and the allowed methods/headers omit `GET, HEAD` and `Range` et al. Same reasoning as PTL-LIV-004 — a provenance pointer at the upstream GeoPackage, not a byte range a browser client needs to fetch through this catalog. | upstream: not ours to fix |
+
+Only `adm0/collection.json` is listed because `rashid --live` reports the
+`github.com` host finding once per host, not once per collection; `adm1` and
+`adm2` carry the identical `source-gpkg` pattern (a `github.com/.../raw/...`
+link, role `source`) and would fail the same two rules if probed
+independently. Reproduce with:
+
+```bash
+rashid check catalog/ --live --all --json
+```
+
+`tests/test_conformance.py`'s CI gate runs `rashid check ... --no-data` (no
+`--live`), so these two findings do not appear in CI today — `--live` probes
+hosting servers over the network, which `--no-data`'s whole point is to avoid.
+They are recorded here, and the rule ids are in `ACCEPTED`, so that a future
+`--live` CI gate (or a manual `rashid check catalog/ --live` before
+publishing) does not have to rediscover that this is upstream's hosting, not
+this catalog's.
 
 <!--
 When you accept one, add a row and a section explaining it, like this:
@@ -49,9 +70,11 @@ neither.
 
 ## Advisory findings this catalog does not act on
 
-These are not deviations. `rashid` reports no error-severity finding against
-this catalog, and the `ACCEPTED` list above is empty. The entries below are
-advisory output from `portolan check` and from `gpio check`, recorded here so
+These are not deviations. `rashid check ... --no-data` (the CI gate) reports
+no error-severity finding against this catalog. The two rows in "Accepted
+deviations" above only surface under `--live`, which CI does not pass. The
+entries below are advisory output from `portolan check` and from `gpio check`,
+recorded here so
 nobody has to rediscover the reasoning.
 
 ### PTL-PRO-002: no `canonical` link on the mirror collections

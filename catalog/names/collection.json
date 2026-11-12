@@ -133,6 +133,17 @@
       "file:checksum": "1220e106ba4871c66de23e563e77055febab5c6740e564c7bc45e1cde35805c6c9af",
       "table:primary_geometry": "geometry"
     },
+    "index-manifest": {
+      "href": "./index.json",
+      "type": "application/json",
+      "title": "Index manifest for the geocoder (cnmw-index/1.0)",
+      "roles": [
+        "metadata"
+      ],
+      "file:size": 5264,
+      "file:checksum": "122069e02ded3daa18220af81de8b6b5f5fdff9c4d761f5b22525affcc15417a23bb",
+      "description": "The kilobyte a client fetches before the index: its size, row group count, checksum, catalog version, the URL and row count of every boundary and display file, and the attribution each one requires with a share_alike flag. Also documents the level-0 join (country/shapeGroup, no shapeID) and the absent cnmw:catalog_version footer metadata."
+    },
     "pmtiles": {
       "href": "./names.pmtiles",
       "type": "application/vnd.pmtiles",
