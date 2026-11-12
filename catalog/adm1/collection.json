@@ -9,7 +9,7 @@
   ],
   "id": "adm1",
   "title": "CGAZ ADM1 - First-Level Administrative Boundaries",
-  "description": "3,224 first-level administrative units worldwide (states, provinces, regions, governorates) from the geoBoundaries CGAZ composite, as GeoParquet 1.1 with bbox covering metadata and spatially sorted into 51 row groups of 64 rows. 3,202 rows are genuine first-level units; 20 are disputed areas and 2 are countries with no first-level breakdown, Antarctica and Vatican City, carried up so the composite stays seamless. Geometry is each country's geoBoundaries submission simplified to roughly a tenth of its vertices and clipped to US Department of State international boundaries. Read the [agent guide](AGENTS.md): `shapeType` is what tells you whether a row is really an ADM1 unit, and the composite publishes no key linking a unit to its parent country's subdivisions. A second GeoParquet file, `cgaz_adm1_display.parquet`, carries the same rows in the same order with geometry simplified and buffered outward, 13 MB against 75, for drawing and for spatial filtering.",
+  "description": "3,224 first-level administrative units worldwide (states, provinces, regions, governorates) from the geoBoundaries CGAZ composite, as GeoParquet 1.1 with bbox covering metadata and spatially sorted into 202 row groups of 16 rows, so one unit's geometry costs about 220 KB to fetch rather than the whole 81 MB file. 3,202 rows are genuine first-level units; 20 are disputed areas and 2 are countries with no first-level breakdown, Antarctica and Vatican City, carried up so the composite stays seamless. Geometry is each country's geoBoundaries submission simplified to roughly a tenth of its vertices and clipped to US Department of State international boundaries. Read the [agent guide](AGENTS.md): `shapeType` is what tells you whether a row is really an ADM1 unit, and the composite publishes no key linking a unit to its parent country's subdivisions. A second GeoParquet file, `cgaz_adm1_display.parquet`, carries the same rows in the same order and the same row groups with geometry simplified and buffered outward, 13 MB against 81, which brings one unit's outline down to about 37 KB, for drawing and for spatial filtering.",
   "license": "CC-BY-4.0",
   "keywords": [
     "administrative boundaries",
@@ -123,12 +123,12 @@
     "data": {
       "href": "./cgaz_adm1.parquet",
       "type": "application/vnd.apache.parquet",
-      "title": "First-Level Administrative Boundaries, GeoParquet 1.1 (51 row groups of 64 rows, zstd)",
+      "title": "First-Level Administrative Boundaries, GeoParquet 1.1 (202 row groups of 16 rows, zstd)",
       "roles": [
         "data"
       ],
-      "file:size": 74997064,
-      "file:checksum": "122075b43bc46676b4ee23bcfe8cb50cdf1217eb300cfda2642cbb95fb23189e9ad5",
+      "file:size": 80585156,
+      "file:checksum": "1220f87657d1a2f83df97f676709fc40d871e03c4c0262a591f682bc2ef84ca84d71",
       "table:primary_geometry": "geometry"
     },
     "pmtiles": {
@@ -148,14 +148,14 @@
     "display": {
       "href": "./cgaz_adm1_display.parquet",
       "type": "application/vnd.apache.parquet",
-      "title": "First-Level Administrative Boundaries, display and filter geometry (51 row groups of 64 rows, aligned with the data asset)",
+      "title": "First-Level Administrative Boundaries, display and filter geometry (202 row groups of 16 rows, aligned with the data asset)",
       "roles": [
         "data",
         "overview"
       ],
       "description": "The same rows in the same order and the same row group boundaries as the data asset, with geometry simplified and then buffered **outward** by the simplification tolerance, so the shape contains the true boundary rather than cutting inside it. Built for drawing an outline fast and for pre-filtering another dataset, where over-fetching is cheap and a missing edge feature is a wrong answer. Neighbouring units overlap in the margin. Do not measure area from it, do not use it to decide which side of a border a point falls on, and do not publish it as a boundary. See the [catalog agent guide](../AGENTS.md) and [changes-from-upstream.md](../changes-from-upstream.md).",
-      "file:size": 13273152,
-      "file:checksum": "12201f7c8306d137ea6312216f6867ac0b00580a77a61c038c493e4400898a73c637",
+      "file:size": 13179712,
+      "file:checksum": "1220245ccdcc880730773a087fb27f6575753904825b060970ab2f3a67d0d7493c0e",
       "table:primary_geometry": "geometry",
       "table:row_count": 3224
     },

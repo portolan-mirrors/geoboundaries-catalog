@@ -9,7 +9,7 @@
   ],
   "id": "adm0",
   "title": "CGAZ ADM0 - Country Boundaries",
-  "description": "The 218 country-level polygons of the geoBoundaries CGAZ composite, as GeoParquet 1.1 with bbox covering metadata and spatially sorted into 55 row groups of 4 rows, so a client can pull one country's geometry in a single range request instead of downloading 97 MB. 198 rows are recognized countries and 20 are disputed areas carried as polygons of their own. The outlines come from the US Department of State Large Scale International Boundaries file, dissolved to one polygon per ISO code, and unlike the ADM1 and ADM2 levels they are not simplified: 10.1 million vertices across 218 units. Read the [agent guide](AGENTS.md) before querying, and note that CGAZ ADM0 publishes no `shapeID`, so `shapeGroup` is the join key at this level.",
+  "description": "The 218 country-level polygons of the geoBoundaries CGAZ composite, as GeoParquet 1.1 with bbox covering metadata and spatially sorted into 218 row groups of 1 row -- one country per row group -- so a client pulls one country's geometry in a single range request of about 250 KB instead of downloading 104 MB. A second GeoParquet file, `cgaz_adm0_display.parquet`, carries the same 218 rows in the same order and the same row groups with geometry simplified and buffered outward, 7.5 MB against 104, which brings one country's outline down to about 10 KB. 198 rows are recognized countries and 20 are disputed areas carried as polygons of their own. The outlines come from the US Department of State Large Scale International Boundaries file, dissolved to one polygon per ISO code, and unlike the ADM1 and ADM2 levels they are not simplified: 10.1 million vertices across 218 units. Read the [agent guide](AGENTS.md) before querying, and note that CGAZ ADM0 publishes no `shapeID`, so `shapeGroup` is the join key at this level.",
   "license": "CC-BY-4.0",
   "keywords": [
     "administrative boundaries",
@@ -121,12 +121,12 @@
     "data": {
       "href": "./cgaz_adm0.parquet",
       "type": "application/vnd.apache.parquet",
-      "title": "Country Boundaries, GeoParquet 1.1 (55 row groups of 4 rows, zstd)",
+      "title": "Country Boundaries, GeoParquet 1.1 (218 row groups of 1 rows, zstd)",
       "roles": [
         "data"
       ],
-      "file:size": 96593435,
-      "file:checksum": "12206ef3b8285b5dcaf23ee54be3add833b0cbc1b4d9909f6f09b5808ae8fafb75dd",
+      "file:size": 104201824,
+      "file:checksum": "12203e0b97366780cf4e90466a1c1759a8923f0f62dd88aada50019282712cba4c78",
       "table:primary_geometry": "geometry"
     },
     "pmtiles": {
@@ -146,14 +146,14 @@
     "display": {
       "href": "./cgaz_adm0_display.parquet",
       "type": "application/vnd.apache.parquet",
-      "title": "Country Boundaries, display and filter geometry (55 row groups of 4 rows, aligned with the data asset)",
+      "title": "Country Boundaries, display and filter geometry (218 row groups of 1 rows, aligned with the data asset)",
       "roles": [
         "data",
         "overview"
       ],
       "description": "The same rows in the same order and the same row group boundaries as the data asset, with geometry simplified and then buffered **outward** by the simplification tolerance, so the shape contains the true boundary rather than cutting inside it. Built for drawing an outline fast and for pre-filtering another dataset, where over-fetching is cheap and a missing edge feature is a wrong answer. Neighbouring units overlap in the margin. Do not measure area from it, do not use it to decide which side of a border a point falls on, and do not publish it as a boundary. See the [catalog agent guide](../AGENTS.md) and [changes-from-upstream.md](../changes-from-upstream.md).",
-      "file:size": 7374831,
-      "file:checksum": "12206446f8614d2e5cf9ef84f725a313eef629ad33d2ca78aeec7d1f1f57966f225c",
+      "file:size": 7521581,
+      "file:checksum": "1220f91188472f2555e565b6270c04c1768f44d53159a1ba5560e230574275022544",
       "table:primary_geometry": "geometry",
       "table:row_count": 218
     },

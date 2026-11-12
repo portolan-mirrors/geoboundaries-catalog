@@ -87,35 +87,58 @@ therefore no canonical STAC object to point at, and the `via` link to
 plus the `source-gpkg` asset carry the provenance instead. Add a `canonical`
 link if geoBoundaries ever publishes STAC.
 
-### `portolan check`: "8 registered asset(s) are missing from disk"
+### `portolan check`: "11 registered asset(s) are missing from disk"
 
 The GeoParquet and PMTiles assets are not in the repository, by design. They
 are built into `../geoboundaries-staging/publish` and uploaded by
 `tools/upload_data.py`. `portolan check` walks the metadata tree and cannot
 see them. The same split is why `tests/test_links.py` takes `CI_LIGHT=1`.
 
+The count rose from 8 to 11 on 2026-11-12: the ADM2 display file is one, and
+the other two are the second and third `source-gpkg` assets on the `names`
+collection, which is built from all three levels and now links all three
+upstream GeoPackages rather than none.
+
 ### `gpio check`: "row count per group is very low"
 
 `gpio check` wants 10,000 to 200,000 rows per row group and warns about all
-four files here, which use 4, 64, 512 and 1,536. That guidance is written for
+four files here, which use 1, 16, 256 and 1,536. That guidance is written for
 scan-heavy analytics, where a large row group amortizes per-group overhead
 across a full-table read.
 
 This catalog exists because the CGAZ mirror it replaces followed that
 guidance: all 49,349 ADM2 rows in one row group, so fetching one
-municipality's geometry meant reading the whole geometry column chunk. Each
-size here was set from the file's measured compressed bytes per row so that a
-row group is 1.0 to 1.8 MB, which is what one single-feature range request
-costs. The search index targets 100-150 KiB per group instead, measured
-against prefix-lookup latency.
+municipality's geometry meant reading the whole geometry column chunk.
+hyparquet, the reader a browser uses, has no sub-chunk read, so one feature
+costs one row group whatever that group holds.
+
+Shrinking row groups is not free, which is why these sizes come from a sweep
+rather than from a bytes-per-row target. The thrift footer carries one record
+per column per row group and the page index one entry per page per column per
+row group, both at the end of the file, and a range client reads them before
+any data. `tools/rowgroup_sweep.py` therefore minimizes trailing bytes plus
+one row group, which is what a client's first select costs: 1 row at ADM0, 16
+at ADM1, 256 at ADM2. The search index targets 100-150 KiB per group instead,
+measured against prefix-lookup latency.
+
+In the boundary and display files, row group statistics are written only for
+`shapeID`, `shapeGroup` and the four `bbox` struct leaves, which are the only
+columns a client of these Hilbert-sorted files can prune on. Measured on ADM2
+at 256 rows per group, that restriction cut the trailing bytes from 670,381 to
+346,581. The names index keeps statistics on every column, because its sort
+order is what makes `name_norm` prune.
 
 The tradeoff is real and accepted: a full-table scan of these files reads more
-footer metadata than it would at 50,000 rows per group. The ADM2 footer is
-226,817 bytes, which is 0.2% of the file.
+footer metadata than it would at 50,000 rows per group, and the files
+themselves are 3.8% to 7.9% larger because smaller row groups compress worse.
+The ADM2 trailing span is 346,581 bytes, which is 0.3% of the file. Every
+file's exact `footer_bytes` and `footer_metadata_bytes` are published in
+`catalog/names/index.json`, so a client pays one range request for all of it
+rather than hyparquet's speculative 512 KiB tail.
 
 ### The `display` assets use the `overview` role
 
-Each boundary collection with a display sidecar publishes it as
+Each boundary collection publishes its display file as
 `"roles": ["data", "overview"]`. `overview` is STAC's common role for a
 reduced-resolution version of the data asset, which is what a simplified
 geometry file is; the Portolan profile does not define a role of its own for

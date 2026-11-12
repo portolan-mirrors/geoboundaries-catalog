@@ -23,7 +23,13 @@ Public root:
 | [`adm0`](adm0/collection.json) | 218 | Country-level polygons, plus 20 disputed areas |
 | [`adm1`](adm1/collection.json) | 3,224 | First-level units: states, provinces, regions |
 | [`adm2`](adm2/collection.json) | 49,349 | Second-level units: counties, districts, municipalities |
-| [`names`](names/collection.json) | 52,398 | Name search index across all three levels, one point per unit |
+| [`names`](names/collection.json) | 52,398 | The gazetteer index across all three levels, one point per unit |
+
+Together they are a cloud-native gazetteer over the CGAZ boundaries: the
+`names` collection resolves typed text to a unit, and the three boundary
+collections hold that unit's geometry. **This is place-name and boundary
+lookup, not address geocoding** — nothing here knows about streets, house
+numbers or postcodes.
 
 [geoBoundaries](https://www.geoboundaries.org/), built by the community and
 [William & Mary geoLab](https://geolab.wm.edu/), produces the data and is the
@@ -39,9 +45,9 @@ listed, with how to reproduce it and how to get the vanilla behaviour, in
 - 1,275 of 1,276 invalid geometries are **repaired** with `ST_MakeValid`.
 - One all-NULL column, `id`, is **dropped**.
 - The CRS is **assigned**: the upstream GeoPackages declare none.
-- Measured columns, a bbox covering column, a Hilbert row order and small row
-  groups are **added**.
-- The `names` and `*_display` collections and assets are **ours**, with no
+- Measured columns, a bbox covering column, a Hilbert row order and row groups
+  sized for single-feature reads are **added**.
+- The `names` gazetteer and the `*_display` assets are **ours**, with no
   upstream equivalent.
 
 Nothing is filtered out. Every row and every attribute of the upstream release
@@ -56,24 +62,33 @@ responding.
 
 | you want | read | why |
 |---|---|---|
-| To draw one unit's outline, now | `adm0/cgaz_adm0_display.parquet`, `adm1/cgaz_adm1_display.parquet` | Simplified. Canada is 528,021 coordinates at full resolution and 7,000-odd here |
+| To draw one unit's outline, now | `cgaz_adm{N}_display.parquet` | Simplified. One range request of 11 KB at ADM0, 39 KB at ADM1, 191 KB at ADM2 |
 | To draw thousands of units, or a basemap layer | the PMTiles archive | Tiled, so the browser only fetches what is on screen |
-| To clip, measure, export, or analyse | `cgaz_adm{N}.parquet` | The real geometry. 1 to 1.8 MB per range request |
+| To clip, measure, export, or analyse | `cgaz_adm{N}.parquet` | The real geometry. One range request of 210 KB at ADM0, 251 KB at ADM1, 520 KB at ADM2 |
 | To filter *another* dataset to a unit | the display file | Outward-biased on purpose; see below |
 
-**ADM2 has no display file**, and that is a measurement rather than an
-omission. Its geometry is already simplified upstream: the median unit is 82
-coordinates, the 90th percentile 560, the 99th 2,837, and only 14 rows of
-49,349 exceed 20,000 **[derived]**. Reading one unit from the full-resolution
-ADM2 file is already sub-millisecond work. ADM0 is the opposite case: its
-median unit is 21,583 coordinates, because CGAZ does not simplify that level
-at all.
+**All three levels carry a display file.** ADM2's arrived on 2026-11-12,
+reversing an earlier decision this catalog documented as "ADM2 has no display
+file". That decision was right about the wrong quantity: ADM2 geometry is
+already simplified upstream — the median unit is 82 coordinates, the 90th
+percentile 560, the 99th 2,837, and only 14 rows of 49,349 exceed 20,000
+**[derived]** — so *decoding* one unit was never slow. But hyparquet has no
+sub-chunk read, so fetching one ADM2 feature pulls that row group's whole
+geometry column chunk, which measured a median of 1.35 MB and 2.1 seconds
+against the live catalog, worst case 3.5 MB and 4.3 seconds **[derived]**. What
+fills a row group is the tail, not the median. ADM0 is a different case again:
+its median unit is 21,583 coordinates, because CGAZ does not simplify that
+level at all.
 
 ### The display files are outward-biased, and that matters
 
 Geometry in a `*_display.parquet` is
-`ST_Buffer(ST_SimplifyPreserveTopology(geom, tol), tol, 2)` with `tol` of 0.01
-degrees. Simplification alone cuts corners *inward*, and a shape used as a
+`ST_Buffer(ST_SimplifyPreserveTopology(geom, tol), tol, 2)` with `tol` capped
+per feature at `sqrt(area)/25` degrees at ADM0 and ADM1 and `sqrt(area)/18` at
+ADM2, and at a flat 0.01 degrees for large units. Every feature at every level
+retains at least 99% of its original area: the worst cases are 99.95% at ADM0,
+99.87% at ADM1 and 99.15% at ADM2 **[derived]**.
+Simplification alone cuts corners *inward*, and a shape used as a
 spatial filter that sits inside the true boundary silently drops features near
 the edge. Buffering outward by the same distance makes the result contain the
 original instead. Over-fetching is cheap; a missing edge feature is a wrong
@@ -110,9 +125,11 @@ End to end, with no server. The mechanics, with runnable code, are in
    connection you do not trust, use the range-request path instead: the file
    is sorted by `name_norm`, so a typed prefix maps to a contiguous run of row
    groups. Over all 676 two-letter prefixes a prefix touches a **median of 1
-   and at most 3** of the 35 row groups, each about 109 KiB **[derived]**. The
-   footer plus page index is ~107,000 bytes, inside hyparquet's 512 KiB default
-   prefetch, so one request plans the rest.
+   and at most 3** of the 35 row groups, each about 109 KiB **[derived]**. Its
+   footer plus page index is exactly 107,089 bytes and its thrift footer alone
+   75,606, both published in [`names/index.json`](names/index.json); pass one
+   of them as hyparquet's `initialFetchSize` rather than letting it speculate
+   a 512 KiB tail.
 2. **Search the prefix.** Match on `name_norm`, which is case-folded and
    accent-stripped, so `zurich` finds `Zürich`. Rank with `area_km2` and
    disambiguate with `name_dupes` and `country_name`: 32 units are called
@@ -123,8 +140,8 @@ End to end, with no server. The mechanics, with runnable code, are in
 4. **Draw the outline immediately from the display file**, at the row index
    the index gave you, or from its `bbox` if all you need is a camera move.
 5. **Fetch full resolution in the background** if the user is going to export,
-   clip or measure. It is one range request of 1 to 1.8 MB against the same
-   row group number.
+   clip or measure. It is one range request against the same row group number,
+   210 KB at ADM0, 251 KB at ADM1, 520 KB at ADM2.
 6. **Use the boundary as a spatial filter** for downloading some *other*
    dataset. This is where the outward bias earns its keep: the display polygon
    contains the true boundary, so a bbox or polygon filter built from it
@@ -207,7 +224,7 @@ ADM0      2
 
 The PMTiles archives are for drawing, one per boundary level plus one for the
 index points. The GeoParquet files are for querying. Do not download a
-GeoParquet file to draw a map: the ADM0 file is 97 MB and its PMTiles archive
+GeoParquet file to draw a map: the ADM0 file is 104 MB and its PMTiles archive
 is 7 MB.
 
 ## How this catalog was built
@@ -220,7 +237,7 @@ each runnable on its own, with no step hidden in a notebook:
 python3 tools/fetch_sources.py      # 547 MB of GeoPackages from upstream
 python3 tools/build_boundaries.py   # -> 3 GeoParquet files, ~70 s
 python3 tools/build_names.py        # -> the search index, ~5 s
-python3 tools/build_display.py      # -> 2 display sidecars, ~30 s
+python3 tools/build_display.py      # -> 3 display sidecars
 python3 tools/build_pmtiles.py      # -> 4 PMTiles archives, ~12 min
 python3 tools/make_styles.py        # -> 15 style JSONs
 python3 tools/make_thumbnails.py    # -> 4 thumbnails
@@ -234,11 +251,12 @@ The tool chosen at each step, and why:
 |---|---|---|
 | GeoPackage to Parquet | `ogr2ogr -f Parquet -a_srs EPSG:4326` | About a second per level, against minutes for a DuckDB spatial scan of the same file. `-a_srs` is what repairs the missing CRS. |
 | Measures, Hilbert order | DuckDB 1.4 with `spatial` | `ST_Hilbert` over a fixed whole-globe envelope, so all four files sit on one comparable curve. |
-| The Parquet write | PyArrow | The only writer here that honours an exact small row group size and writes the page index. `gpio sort hilbert` snaps row groups up to a 2,048-row writer vector, which would put all 218 ADM0 rows in one group. |
+| The Parquet write | PyArrow | The only writer here that honours an exact small row group size, writes the page index, and takes a per-column statistics list. `gpio sort hilbert` snaps row groups up to a 2,048-row writer vector, which would put all 218 ADM0 rows in one group. |
 | Vector tiles | `ogr2ogr -f GeoJSONSeq` piped to `tippecanoe` | No intermediate GeoJSON on disk. `--detect-shared-borders` keeps a shared edge between neighbours simplified identically, so the composite does not open hairline gaps. |
 | Geometry repair | DuckDB `ST_MakeValid` + `ST_CollectionExtract(..., 3)` | Applied only where `ST_IsValid` is false, so valid rows pass through byte for byte. |
-| Display geometry | DuckDB `ST_SimplifyPreserveTopology` then `ST_Buffer` | Buffering outward is what makes the result safe as a spatial filter. 2 quadrant segments, or the buffer puts back the coordinates simplification removed. |
-| Validation | `gpq validate`, `rashid`, `stac-check` | `gpq validate` passes 20 of 20 checks on all six GeoParquet files. |
+| Display geometry | DuckDB `ST_SimplifyPreserveTopology` then `ST_Buffer` | Buffering outward is what makes the result safe as a spatial filter. 2 quadrant segments, or the buffer puts back the coordinates simplification removed. `ST_ReducePrecision` was tried instead and rejected: it raises `TopologyException: side location conflict` on the ADM2 geometry. |
+| Row group sizing | `tools/rowgroup_sweep.py` | Minimizes trailing bytes plus one row group, which is what a client's first select costs. |
+| Validation | `gpq validate`, `rashid`, `stac-check` | `gpq validate` passes 20 of 20 checks on every GeoParquet file here. |
 
 `tools/distributions.sql` reruns every distribution behind every style class
 break and every count quoted in this catalog's prose.
@@ -280,13 +298,13 @@ Assets and structural links resolve relative to the object that carries them.
 
 ## A sibling catalog, and what it trades
 
-[cn-geocoder-overture](https://github.com/portolan-mirrors/cn-geocoder-overture)
+[cn-gazetteer-overture](https://github.com/portolan-mirrors/cn-gazetteer-overture)
 is a sibling catalog built to the same shape from Overture Maps divisions. It
 is **experimental**, and it exists because this catalog stops at the second
 administrative level: Overture carries cities and localities below that, and
 carries names in many languages where geoBoundaries carries one. Its future
 home is the unlisted Source Cooperative repository
-`portolan-mirrors/cn-geocoder-overture`.
+`portolan-mirrors/cn-gazetteer-overture`.
 
 A widget can be pointed at either index; they are built to the same column
 contract. **The deciding factor is the license, not the coverage.** This

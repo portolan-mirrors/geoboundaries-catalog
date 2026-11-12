@@ -134,8 +134,8 @@
       "roles": [
         "data"
       ],
-      "file:size": 3895531,
-      "file:checksum": "122054d1074504e60c4141dde7d9f28110b326bcc7ee9272cc7c865bdd63b2b50b1d",
+      "file:size": 3901414,
+      "file:checksum": "12200b705985fd9bfc2a0e40564d4e13b9d17f98b44bd32bc1388322bee2455096df",
       "table:primary_geometry": "geometry"
     },
     "pmtiles": {
@@ -183,6 +183,42 @@
       "file:size": 1039,
       "file:checksum": "1220c6d4f3c7641c59b05f5c5ff4878995fbb91c932b2d2a9b37052a6aa063881379"
     },
+    "source-gpkg-adm0": {
+      "href": "https://github.com/wmgeolab/geoBoundaries/raw/main/releaseData/CGAZ/geoBoundariesCGAZ_ADM0.gpkg",
+      "type": "application/geopackage+sqlite3",
+      "title": "geoBoundariesCGAZ_ADM0.gpkg, the upstream GeoPackage",
+      "roles": [
+        "data",
+        "source"
+      ],
+      "file:size": 162144256,
+      "file:checksum": "12206bdeb27072cf3759edfe9d31e037ebaf2481d9e0fa5ad18c1036346e42b4c41a",
+      "description": "The file this collection was built from, at its original location. Served through git-lfs from the default branch, so the URL is not version-pinned; the release this collection mirrors is the commit recorded in processing_notes."
+    },
+    "source-gpkg-adm1": {
+      "href": "https://github.com/wmgeolab/geoBoundaries/raw/main/releaseData/CGAZ/geoBoundariesCGAZ_ADM1.gpkg",
+      "type": "application/geopackage+sqlite3",
+      "title": "geoBoundariesCGAZ_ADM1.gpkg, the upstream GeoPackage",
+      "roles": [
+        "data",
+        "source"
+      ],
+      "file:size": 144470016,
+      "file:checksum": "1220d2f2f7854e887c99a23f2ad1c9e7627c05db15ecc4d9f94972c0d193d255a63d",
+      "description": "The file this collection was built from, at its original location. Served through git-lfs from the default branch, so the URL is not version-pinned; the release this collection mirrors is the commit recorded in processing_notes."
+    },
+    "source-gpkg-adm2": {
+      "href": "https://github.com/wmgeolab/geoBoundaries/raw/main/releaseData/CGAZ/geoBoundariesCGAZ_ADM2.gpkg",
+      "type": "application/geopackage+sqlite3",
+      "title": "geoBoundariesCGAZ_ADM2.gpkg, the upstream GeoPackage",
+      "roles": [
+        "data",
+        "source"
+      ],
+      "file:size": 240824320,
+      "file:checksum": "12206bc948cdd84575b733573d7983cf2503e1c71d66d2434db04502ae5fba60eec1",
+      "description": "The file this collection was built from, at its original location. Served through git-lfs from the default branch, so the URL is not version-pinned; the release this collection mirrors is the commit recorded in processing_notes."
+    },
     "thumbnail": {
       "href": "./names.thumb.png",
       "type": "image/png",
@@ -200,8 +236,8 @@
       "roles": [
         "metadata"
       ],
-      "file:size": 7426,
-      "file:checksum": "122036a505661012da827731d9101ebc2ace67bd8b4c42a75084d2adacec7b84c5f3",
+      "file:size": 10364,
+      "file:checksum": "1220c371f353a06bd76f5ff22cbf761889820c334a31b8b7abd25953679455eb8460",
       "description": "The kilobyte a client fetches before the index: its size, row group count, checksum, catalog version, the URL, row count and row_group_rows of every boundary and display file, and the attribution each one requires with a share_alike flag. row_group_rows is what a client combines with a names-index row's geometry_ref to range-read exactly one row group of the boundary file instead of scanning candidates by statistics. Also documents the level-0 join (country/shapeGroup, no shapeID) and the absent cnmw:catalog_version footer metadata."
     }
   },

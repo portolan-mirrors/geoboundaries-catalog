@@ -9,7 +9,7 @@
   ],
   "id": "adm2",
   "title": "CGAZ ADM2 - Second-Level Administrative Boundaries",
-  "description": "49,349 second-level administrative units worldwide (counties, districts, municipalities, communes) from the geoBoundaries CGAZ composite, as GeoParquet 1.1 with bbox covering metadata and spatially sorted into 97 row groups of 512 rows, so one unit's geometry costs about 1 MB to fetch rather than the whole 101 MB file. 49,015 rows are genuine second-level units; 312 are first-level units standing in for 22 countries that have no second-level data, 20 are disputed areas and 2 are countries. Brazil alone contributes 5,570 rows. Read the [agent guide](AGENTS.md): 37 rows have no name, and `shapeType` is what tells you whether a row is really an ADM2 unit.",
+  "description": "49,349 second-level administrative units worldwide (counties, districts, municipalities, communes) from the geoBoundaries CGAZ composite, as GeoParquet 1.1 with bbox covering metadata and spatially sorted into 193 row groups of 256 rows, so one unit's geometry costs about 325 KB to fetch rather than the whole 104 MB file. A second GeoParquet file, `cgaz_adm2_display.parquet`, carries the same rows in the same order and the same row groups with geometry simplified and buffered outward, 42 MB against 104, which halves that again to about 151 KB for one unit's outline. 49,015 rows are genuine second-level units; 312 are first-level units standing in for 22 countries that have no second-level data, 20 are disputed areas and 2 are countries. Brazil alone contributes 5,570 rows. Read the [agent guide](AGENTS.md): 37 rows have no name, and `shapeType` is what tells you whether a row is really an ADM2 unit.",
   "license": "CC-BY-4.0",
   "keywords": [
     "administrative boundaries",
@@ -123,12 +123,12 @@
     "data": {
       "href": "./cgaz_adm2.parquet",
       "type": "application/vnd.apache.parquet",
-      "title": "Second-Level Administrative Boundaries, GeoParquet 1.1 (97 row groups of 512 rows, zstd)",
+      "title": "Second-Level Administrative Boundaries, GeoParquet 1.1 (193 row groups of 256 rows, zstd)",
       "roles": [
         "data"
       ],
-      "file:size": 100448329,
-      "file:checksum": "1220081f662a79ba833e07fb8f0fd87a7ed84043681bd142401fe01b0dd8192359ca",
+      "file:size": 104282056,
+      "file:checksum": "122002a06118091991a330795df0384c9491145193837b491589249ccbef782af09d",
       "table:primary_geometry": "geometry"
     },
     "pmtiles": {
@@ -144,6 +144,20 @@
       "pmtiles:layers": [
         "adm2"
       ]
+    },
+    "display": {
+      "href": "./cgaz_adm2_display.parquet",
+      "type": "application/vnd.apache.parquet",
+      "title": "Second-Level Administrative Boundaries, display and filter geometry (193 row groups of 256 rows, aligned with the data asset)",
+      "roles": [
+        "data",
+        "overview"
+      ],
+      "description": "The same rows in the same order and the same row group boundaries as the data asset, with geometry simplified and then buffered **outward** by the simplification tolerance, so the shape contains the true boundary rather than cutting inside it. Built for drawing an outline fast and for pre-filtering another dataset, where over-fetching is cheap and a missing edge feature is a wrong answer. Neighbouring units overlap in the margin. Do not measure area from it, do not use it to decide which side of a border a point falls on, and do not publish it as a boundary. See the [catalog agent guide](../AGENTS.md) and [changes-from-upstream.md](../changes-from-upstream.md).",
+      "file:size": 42419433,
+      "file:checksum": "122029bedbb65be2a9b557f817e78d980e481536e687377f0487677934e99530f829",
+      "table:primary_geometry": "geometry",
+      "table:row_count": 49349
     },
     "style-default": {
       "href": "./styles/default.json",

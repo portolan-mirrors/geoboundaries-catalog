@@ -11,19 +11,31 @@ producer and the authoritative source.
 | | |
 |---|---|
 | Rows | 49,349 (49,015 `ADM2`, 312 `ADM1`, 20 `DISP`, 2 `ADM0`) |
-| GeoParquet | 101 MB, 97 row groups of 512 rows, zstd, bbox covering |
+| GeoParquet | 104 MB, 193 row groups of 256 rows, zstd, bbox covering |
 | PMTiles | 101 MB, zoom 0-9 |
 | CRS | CRS84 (EPSG:4326), as published |
-| Vertices | 13,183,670, a mean of 267 per unit |
+| Vertices | 12,980,126 as published, a mean of 263 per unit, 187,879 at most (The upstream GeoPackage holds 13,183,670; this catalog publishes fewer because `ST_MakeValid` drops degenerate vertices from the geometry it repairs) |
 
 ## Why the row groups are small
 
-97 row groups of 512 rows is the point of this collection. The CGAZ ADM2 mirror
-this one replaces put all 49,349 rows in a single row group, so a client that
-wanted one municipality's geometry had to read the whole geometry column chunk —
-about 97 MB for one polygon. Here that fetch is a single range request of about
-1 MB, and the GeoParquet 1.1 bbox covering column plus a Hilbert row order let
-a reader find the right group without decoding any geometry.
+193 row groups of 256 rows is the point of this collection. The CGAZ ADM2
+mirror this one replaces put all 49,349 rows in a single row group, so a client
+that wanted one municipality's geometry had to read the whole geometry column
+chunk — close to 100 MB for one polygon. Here that fetch is a single range
+request of about 520 KB, and the GeoParquet 1.1 bbox covering column plus a
+Hilbert row order let a reader find the right group without decoding any
+geometry.
+
+The size is not a bytes-per-group target. hyparquet, the reader a browser uses,
+has no sub-chunk read, so one feature costs one whole row group; but the
+Parquet footer carries a record per column per row group and a range client
+reads it before any data, so a smaller group means a larger footer. 256 rows is
+what minimizes the sum — the trailing bytes plus one row group, which is what a
+client's first select costs. Here that first select is 781.5 KB.
+
+Row group statistics are written only for `shapeID`, `shapeGroup` and the four
+`bbox` struct leaves, which are the only columns a Hilbert-sorted file lets a
+client prune on. That alone cut the trailing bytes from 670,381 to 346,581.
 
 Every column also carries a Parquet page index, so a reader can narrow further
 inside a group.
@@ -42,16 +54,36 @@ polygons are merged in.
 > with how to reproduce it and how to get the vanilla behaviour, is in
 > [changes-from-upstream.md](../changes-from-upstream.md).
 
-## There is no ADM2 display file
+## The display file
 
-The other two levels carry a simplified `*_display.parquet` for fast drawing.
-This one does not, and that is a measurement rather than an omission: CGAZ
-already simplifies ADM2 upstream, so the median unit is 82 coordinates, the
-90th percentile 560, the 99th 2,837, and only 14 rows of 49,349 exceed 20,000.
-Reading one unit from this file is already sub-millisecond work. A tolerance
-coarse enough to shrink the file meaningfully would also put a buffer of a
-kilometre or more around units a few kilometres across, which is a poor trade
-at a level where nothing was slow.
+`cgaz_adm2_display.parquet` holds **the same rows in the same order with the
+same row group boundaries** as the data file, with geometry simplified and then
+buffered outward by the same distance. Row *i* and row group *g* mean the same
+unit in both, so one byte-range plan serves either. It is 42 MB against the
+data file's 104 MB, and one unit's outline costs about 191 KB there against
+520 KB in the data file.
+
+Use it to draw an outline, and to pre-filter another dataset to this unit. The
+outward bias is deliberate: a filter shape that sits inside the true boundary
+silently drops features along the edge, and over-fetching is cheap. Every
+feature retains at least 99% of its original area, the worst case being Contla
+de Juan Cuamatzi (MEX) at 99.1461%.
+
+Do **not** measure area from it, do not use it to decide which side of a
+border a point falls on, and do not publish it as a boundary: neighbouring
+units overlap in the margin. For any of that, read the data file. The full
+rule and the latitude caveat on a buffer measured in degrees are in the
+[catalog agent guide](../AGENTS.md).
+
+**This level gained its display file on 2026-11-12**, reversing an earlier
+decision that was right about the wrong quantity. CGAZ already simplifies ADM2
+upstream — the median unit is 82 coordinates, the 90th percentile 560, the 99th
+2,837, and only 14 rows of 49,349 exceed 20,000 — so *decoding* one unit was
+never slow. But a client does not decode one unit from an isolated byte range:
+it fetches the whole row group's geometry column chunk, and against the live
+catalog that was a median of 1.35 MB and 2.1 seconds, worst case 3.5 MB and
+4.3 seconds. The cost was bytes per row group, and what fills a row group is
+the tail — the 99th percentile and those 14 huge rows — not the median 82.
 
 ## Known issues
 

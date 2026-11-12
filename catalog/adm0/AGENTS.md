@@ -22,8 +22,9 @@ This is a **mirror**. [geoBoundaries](https://www.geoboundaries.org/) is the
 producer and the authoritative source.
 
 ```
-adm0/cgaz_adm0.parquet   97 MB, 218 rows, 55 row groups of 4 rows
-adm0/adm0.pmtiles        7.1 MB, zoom 0-6, layer "adm0"
+adm0/cgaz_adm0.parquet           104 MB, 218 rows, 218 row groups of 1 row
+adm0/cgaz_adm0_display.parquet   7.5 MB, same rows, same row groups
+adm0/adm0.pmtiles                7.1 MB, zoom 0-6, layer "adm0"
 ```
 
 **These are not boundaries as countries claim them.** CGAZ "clipped to
@@ -43,9 +44,11 @@ Boundaries file of March 2020, dissolved to one polygon per ISO code
 which reads `./dta/usDoSLSIB_Mar2020.geojson` and dissolves on `ISO_CODE`]**.
 Unlike ADM1 and ADM2, this level is **not simplified**: the 10% vertex
 reduction in that script applies to the lower levels, and the line that would
-simplify the composite is commented out. Measured: 10,101,960 vertices across
-218 units, a mean of 46,339 **[derived]**. That is why 218 country polygons
-weigh more than 49,349 municipalities.
+simplify the composite is commented out. Measured on the published file: 9,807,040 vertices across
+218 units, a mean of 44,986 **[derived]**. The upstream GeoPackage holds
+10,101,960; the difference is the degenerate vertices `ST_MakeValid` drops
+from the geometry this catalog repairs **[derived]**. That is why 218 country polygons
+weigh as much as all 49,349 municipalities.
 
 Territories are merged into their parent state, so Greenland is part of the
 Denmark polygon and has no row of its own **[attested, the `country_renamer`
@@ -54,16 +57,35 @@ mapping in `gbCGAZBuild.py`]**.
 ## Layout and how to exploit it
 
 Rows are ordered along a Hilbert curve over the whole globe, and the file is
-cut into **55 row groups of 4 rows**, about 1.77 MB each. That is deliberate.
-Four rows per group is far below any general-purpose guidance, and `gpio check`
-warns about it; the warning is correct in general and wrong here. At 513 KB of
-compressed geometry per country, a row group of 1,000 rows would be the whole
-file, which is exactly the defect in other mirrors of this data: fetching one
-country's outline costs a 97 MB read. With 4-row groups and the GeoParquet 1.1
-`bbox` covering column, it costs one range request of about 1.8 MB.
+cut into **218 row groups of 1 row** — one country per row group. That is
+deliberate. One row per group is far below any general-purpose guidance, and
+`gpio check` warns about it; the warning is correct in general and wrong here.
+A row group of 1,000 rows would be the whole file, which is exactly the defect
+in other mirrors of this data: fetching one country's outline costs a 104 MB
+read.
+
+**What a row group size buys and costs.** hyparquet, the reader a browser
+uses, has no sub-chunk read, so fetching one feature pulls that row group's
+whole geometry column chunk: one feature costs one row group whatever else is
+in it. But the thrift footer carries one record per column per row group, and
+a range client reads it before any data, so a smaller group means a larger
+footer. `tools/rowgroup_sweep.py` minimizes the sum, which is what a client's
+first select costs. Measured here: one feature is **209.5 KB** (a cold
+hyparquet read of one row group, all columns, median over 24 random rows), and
+a first select is **481.2 KB**, that plus the 271,716-byte thrift footer. The
+previous layout of 55 row groups of 4 rows cost 1.23 MB and 2,326 ms for one
+feature over the real network.
+
+Row group statistics are written only for `shapeGroup` and the four `bbox`
+struct leaves — this file has no `shapeID` column — because the Hilbert sort
+leaves every other column's min/max ranges overlapping across essentially
+every row group, so they prune nothing and only enlarge the footer.
 
 Every column carries a Parquet page index, so a reader can narrow further
-inside a row group.
+inside a row group. The file's exact trailing sizes are published in
+[`names/index.json`](../names/index.json): `footer_bytes` 348,440 for the whole
+trailing span, `footer_metadata_bytes` 271,716 for the thrift footer alone,
+which is what a hyparquet client should pass as `initialFetchSize`.
 
 Use the `bbox` struct, not the geometry, for any spatial predicate you want
 pruned:

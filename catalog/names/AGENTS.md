@@ -15,9 +15,9 @@ Each factual claim is tagged with how it was established:
 
 ## What this collection holds
 
-**A search sidecar, not a boundary dataset.** One row per named administrative
-unit across all three CGAZ levels, built so that a static client with no server
-can turn a typed name into a `shapeID`, a bbox and a point. Public root:
+**A gazetteer, not a boundary dataset.** One row per named administrative unit
+across all three CGAZ levels, built so that a static client with no server can
+turn a typed name into a `shapeID`, a bbox and a point. Public root:
 `https://data.source.coop/portolan-mirrors/geoboundaries-catalog/catalog.json`
 
 ```
@@ -95,11 +95,22 @@ File geometry, for a client that plans its reads:
 
 | | bytes |
 |---|---|
-| whole file | 3,895,531 |
-| footer + page index (approx, measured as whole-file minus the sum of every column chunk's compressed size) | ~107,000 |
+| whole file | 3,901,414 |
+| footer + page index (`footer_bytes` in [`index.json`](index.json)) | 107,089 |
+| thrift footer alone (`footer_metadata_bytes`) | 75,606 |
 | one row group, all columns (approx) | ~110,500 |
 | one row group, the 7 search columns (approx) | ~45,600 |
 | one row group, `geometry_ref` alone (approx) | ~7,000 |
+
+Both trailing sizes are exact and published per file, for every file in this
+catalog, so a client never has to speculate. `footer_bytes` is the whole
+trailing span: one range request of exactly that many bytes from the end of the
+file leaves a reader holding all of the file's metadata.
+`footer_metadata_bytes` is the thrift footer alone, the minimum needed to
+locate row groups, and it is what a hyparquet client should pass as
+`initialFetchSize` — hyparquet has no sub-chunk read and never touches the page
+index bodies. One cold select of one feature from this file measures 111.4 KB,
+or 187.0 KB counting the footer on a first read.
 
 ## Two ways to use it
 
@@ -110,8 +121,10 @@ At 3.9 MB this is the primary consumption mode. Browser clients read it with
 [hyparquet-compressors](https://github.com/hyparam/hyparquet-compressors),
 which is required because every column chunk is **ZSTD** and hyparquet ships no
 zstd codec of its own **[derived]**. hyparquet's default footer prefetch is
-512 KiB, and this file's footer plus page index is ~107,000 bytes, so one
-prefetch has everything it needs to plan **[derived]**.
+512 KiB and this file's footer plus page index is 107,089 bytes, so the default
+works; pass `initialFetchSize` from [`index.json`](index.json) anyway and fetch
+107,089 bytes, or 75,606 for the thrift footer alone, instead of 524,288
+**[derived]**.
 
 Measured on Node 22 against the built file:
 
@@ -303,23 +316,24 @@ small row groups, and it is also why `geometry_ref` exists.
 row offset the unit sits at in `cgaz_adm{level}.parquet`, captured directly
 off that published file — not recomputed from a join — so it always names a
 real row. `row_group` is `row` floor-divided by the level's row group size
-(`4` for ADM0, `64` for ADM1, `512` for ADM2 — published in
+(`1` for ADM0, `16` for ADM1, `256` for ADM2 — published in
 [`names/index.json`](index.json)'s `boundaries[].row_group_rows`, which a
-client should read rather than hardcode). Because the display file is
-row-aligned with the full file at every level that has one (same row, same
-`shapeID`/`shapeGroup`, verified directly for ADM0 and ADM1), the identical
-`row`/`row_group` pair resolves against either file:
+client should read rather than hardcode). Because every level's display file is
+row-aligned with its full file (same row, same `shapeID`/`shapeGroup`, verified
+at all three levels over 2,000 sampled pointers — 8 at level 0, 121 at level 1
+and 1,871 at level 2, all resolving to the right unit in both files), the
+identical `row`/`row_group` pair resolves against either file:
 
 ```sql
 SELECT name, level, geometry_ref FROM 'names/cgaz_names.parquet'
 WHERE name_norm = 'zurich' AND level = 1;
 ```
 ```
-Zürich  1  {file: cgaz_adm1.parquet, row_group: 29, row: 1891}
+Zürich  1  {file: cgaz_adm1.parquet, row_group: 118, row: 1891}
 ```
 
 ```js
-const hit = { level: 1, shapeId: '...', geometryRef: { rowGroup: 29, row: 1891 } }
+const hit = { level: 1, shapeId: '...', geometryRef: { rowGroup: 118, row: 1891 } }
 const part = await parquetReadObjects({
   file, metadata,  // of adm1/cgaz_adm1_display.parquet
   columns: ['shapeID', 'geometry'],
@@ -342,7 +356,11 @@ Hilbert-sorted (`tools/build_boundaries.py`), not sorted by
 `geometry_ref` stays valid if the boundary file is ever rebuilt from a
 different upstream commit without rebuilding the names index in the same
 pass, or if a client holds a cached names index against a newer boundary
-file (or vice versa). `geometry_ref` only ever *saves a scan*; it never
+file (or vice versa). The Hilbert key alone is not a total order, so the
+builder's `ORDER BY` carries a `shapeGroup, shapeName, shapeID` tiebreaker and
+forces `preserve_insertion_order = true`; without that, a rebuild from the
+same bytes could reorder rows and stale every pointer here at once.
+`geometry_ref` only ever *saves a scan*; it never
 substitutes for checking that the row it names still holds the expected
 `shapeID` (or `shapeGroup` at level 0, since CGAZ ADM0 has no `shapeID`
 column at all). A client that skips the check and the pointer has drifted
@@ -357,10 +375,14 @@ pre-`geometry_ref` method below) and scan them for the exact row.
 
 | what you are doing | read |
 |---|---|
-| Draw the unit's outline on a map, now | `adm0/cgaz_adm0_display.parquet`, `adm1/cgaz_adm1_display.parquet` |
+| Draw the unit's outline on a map, now | `adm{N}/cgaz_adm{N}_display.parquet`, at any of the three levels |
 | Filter *another* dataset to this unit | the same display file |
 | Clip, measure, export, or any analysis | `adm{N}/cgaz_adm{N}.parquet` |
-| Second-level units, anything | `adm2/cgaz_adm2.parquet` — there is no ADM2 display file, because its median unit is 82 coordinates and nothing there was slow |
+
+All three levels carry a display file; ADM2's arrived on 2026-11-12. One
+feature costs 11.2 KB at ADM0, 39.1 KB at ADM1 and 190.7 KB at ADM2 in the
+display files, against 209.5 KB, 251.2 KB and 519.7 KB in the full-resolution
+ones **[derived]**.
 
 The display files hold **the same rows in the same order with the same row
 group boundaries** as the full-resolution files, so the row index and the row
@@ -375,8 +397,9 @@ browser tab stop responding.
 
 **The display geometry is buffered outward on purpose**, by the same distance
 it was simplified by, so it contains the true boundary rather than cutting
-corners inside it. Measured: every feature retains at least 99.87% of its
-original area, and no feature falls below 99% **[derived]**. That bias is what
+corners inside it. Measured: no feature at any level falls below 99% of its
+original area, and the worst cases are 99.9535% at ADM0, 99.8714% at ADM1 and
+99.1461% at ADM2 **[derived]**. That bias is what
 makes it safe as a spatial filter — you over-fetch a little rather than
 silently dropping features along the edge — and it is also why neighbouring
 units overlap in the margin and why you must not measure area from it. The

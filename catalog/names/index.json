@@ -4,16 +4,27 @@
   "index_version": "2026-11-12T00:00:00Z",
   "catalog_version": "geoboundaries-cgaz-2026-11-12",
   "rows": 52398,
-  "levels": [0, 1, 2],
+  "levels": [
+    0,
+    1,
+    2
+  ],
   "stats_truncated": false,
   "dropped_unnamed": 37,
   "index": {
     "url": "./cgaz_names.parquet",
-    "size": 3895531,
-    "checksum": "122054d1074504e60c4141dde7d9f28110b326bcc7ee9272cc7c865bdd63b2b50b1d",
+    "size": 3901414,
+    "checksum": "12200b705985fd9bfc2a0e40564d4e13b9d17f98b44bd32bc1388322bee2455096df",
     "row_groups": 35,
-    "sorted_by": ["name_norm", "level", "country"],
-    "feature_id_column": "shape_id"
+    "sorted_by": [
+      "name_norm",
+      "level",
+      "country"
+    ],
+    "feature_id_column": "shape_id",
+    "row_group_rows": 1536,
+    "footer_bytes": 107089,
+    "footer_metadata_bytes": 75606
   },
   "boundaries": [
     {
@@ -22,16 +33,22 @@
       "index_key_column": "country",
       "country_column": "shapeGroup",
       "geometry_column": "geometry",
-      "row_group_rows": 4,
+      "row_group_rows": 1,
       "full": {
         "url": "../adm0/cgaz_adm0.parquet",
-        "size": 96593435,
-        "row_count": 218
+        "size": 104201824,
+        "row_count": 218,
+        "row_groups": 218,
+        "footer_bytes": 348440,
+        "footer_metadata_bytes": 271716
       },
       "display": {
         "url": "../adm0/cgaz_adm0_display.parquet",
-        "size": 7374831,
-        "row_count": 218
+        "size": 7521581,
+        "row_count": 218,
+        "row_groups": 218,
+        "footer_bytes": 251358,
+        "footer_metadata_bytes": 189008
       }
     },
     {
@@ -39,16 +56,22 @@
       "feature_id_column": "shapeID",
       "country_column": "shapeGroup",
       "geometry_column": "geometry",
-      "row_group_rows": 64,
+      "row_group_rows": 16,
       "full": {
         "url": "../adm1/cgaz_adm1.parquet",
-        "size": 74997064,
-        "row_count": 3224
+        "size": 80585156,
+        "row_count": 3224,
+        "row_groups": 202,
+        "footer_bytes": 353080,
+        "footer_metadata_bytes": 267958
       },
       "display": {
         "url": "../adm1/cgaz_adm1_display.parquet",
-        "size": 13273152,
-        "row_count": 3224
+        "size": 13179712,
+        "row_count": 3224,
+        "row_groups": 202,
+        "footer_bytes": 279870,
+        "footer_metadata_bytes": 205330
       }
     },
     {
@@ -56,11 +79,22 @@
       "feature_id_column": "shapeID",
       "country_column": "shapeGroup",
       "geometry_column": "geometry",
-      "row_group_rows": 512,
+      "row_group_rows": 256,
       "full": {
         "url": "../adm2/cgaz_adm2.parquet",
-        "size": 100448329,
-        "row_count": 49349
+        "size": 104282056,
+        "row_count": 49349,
+        "row_groups": 193,
+        "footer_bytes": 346581,
+        "footer_metadata_bytes": 261810
+      },
+      "display": {
+        "url": "../adm2/cgaz_adm2_display.parquet",
+        "size": 42419433,
+        "row_count": 49349,
+        "row_groups": 193,
+        "footer_bytes": 274277,
+        "footer_metadata_bytes": 200258
       }
     }
   ],
@@ -72,5 +106,5 @@
       "share_alike": false
     }
   ],
-  "notes": "`index.feature_id_column: \"shape_id\"` -- the published names index's stable per-row id column is literally named `shape_id` (matching the boundary files' `shapeID`), not `feature_id`; a client must read it under that name (or alias it to `feature_id` on load, which is what geocoder-core now does) rather than require a column named `feature_id` to exist. The index also carries no `source` column at all -- this catalog has exactly one source, geoBoundaries CGAZ, and does not repeat that on every one of 52,398 rows; a client defaults every row's `source` to this manifest's own top-level `source` field (`geoboundaries-cgaz`) instead of requiring the column. LIVE catalog mirror (portolan-mirrors/geoboundaries-catalog), not provisional. Three admin levels: 218 ADM0 units (198 country + 20 disputed-area DISP polygons), 3,224 ADM1 units, 49,349 ADM2-level boundary rows (of which 48,978 carry a name; the other 371 are ADM1/ADM0 rows carried down to fill ADM2 coverage, per the catalog's names/AGENTS.md -- those are never indexed, independent of the 37 dropped_unnamed below). `dropped_unnamed: 37` counts ADM2 rows whose upstream shapeName is NULL (24 Japan, 12 Turkmenistan, 1 China) and so cannot be found by name; they exist with geometry in adm2/cgaz_adm2.parquet. Level 0 (ADM0 + DISP) has no `shapeID` column at all in the CGAZ source -- not just null values, the column is absent from adm0/cgaz_adm0*.parquet's schema -- so `feature_id_column` is null for level 0 and `index_key_column: \"country\"` names which names-index column is the join key instead; it is matched against the boundary file's `country_column` (`shapeGroup`), which is the same ISO-3166-1-alpha-3 (or geoBoundaries disputed-area code) value the names index stores in its own `country` column. Every level has a `country_column` (`shapeGroup`) available for the two-level narrowing described in the design doc (`select()`'s resolution order); at level 0 it is also the join column itself. Levels 1 and 2 default `index_key_column` to `feature_id` (omitted here) and join on `feature_id_column: \"shapeID\"`. Level 2 has no `display` entry on purpose: its median unit is 82 coordinates (catalog AGENTS.md, adm2/AGENTS.md), so nothing there is slow and a second file would only add a fetch; geocoder-core's `resolveResolutionMode` falls back to `full` for level 2's `display`/`both` requests, which is correct and fast at this size. `bbox` on the names index is float32, rounded outward (never narrower than the true extent) -- see §6.2 amendment. None of the published parquet files (index or boundary) currently carry a `cnmw:catalog_version` footer key-value entry; `catalog_version` here is asserted from the catalog's own publish record (catalog.json `updated`), not cross-checked against parquet footer metadata. geocoder-core's version-skew check (design doc §6.4) is therefore inert against this catalog today -- it neither errors nor warns, because `handle.catalogVersion` reads back `null` -- rather than silently wrong; feature identity is still safe because resolution always re-locates the row by key (shapeID, or shapeGroup at level 0) and never by a cached row offset. Boundary files are NOT globally sorted by (country, feature_id) the way design doc §6.4 requests of the E2 mirror -- they are sorted by this catalog's own build order (AGENTS.md's `country_units`/compactness-oriented layout), so `country_column`/`feature_id_column` row-group statistics still narrow the candidate set (verified non-trivially) but not to a single group the way a fully sorted mirror would; correctness does not depend on the sort, because resolution falls back to scanning every candidate group and the exact match is a linear scan within each, but a client's per-select byte cost is higher than a globally-sorted mirror would need. `geometry_ref` (added 2026-11-12) is this catalog's answer to that cost: every names-index row carries a `{file, row_group, row}` pointer straight into its level's full-resolution boundary file -- `row` is the physical row offset captured directly off the published `cgaz_adm{level}.parquet` with DuckDB's `file_row_number`, and `row_group` is that offset floor-divided by this manifest's own `boundaries[].row_group_rows` (4/64/512 for ADM0/ADM1/ADM2, matching how `tools/build_boundaries.py` wrote those files). It is advisory, never authoritative, exactly because the boundary files are Hilbert-sorted rather than sorted by (country, feature_id): a client reads the referenced row group, decodes the one row at `row`, and MUST verify that row's join key -- `shapeID` at levels 1/2, `shapeGroup` at level 0 -- equals the result's own key before trusting its geometry; on any mismatch (stale `geometry_ref`, a rebuilt boundary file, a version-skewed cache) it must fall back to the stats-pruning scan described above, never trust the hint. Because the display files are row-aligned with the full files at every level that has one (verified directly for ADM0 and ADM1: same row index, same `shapeID`/`shapeGroup`, in both), the same `row`/`row_group` resolves against either file, so a client need not recompute anything when switching between 'display' and 'full' resolution. See catalog AGENTS.md and the per-collection AGENTS.md files for the full facts this manifest was built from."
+  "notes": "`index.feature_id_column: \"shape_id\"` -- the published names index's stable per-row id column is literally named `shape_id` (matching the boundary files' `shapeID`), not `feature_id`; a client must read it under that name (or alias it to `feature_id` on load, which is what geocoder-core now does) rather than require a column named `feature_id` to exist. The index also carries no `source` column at all -- this catalog has exactly one source, geoBoundaries CGAZ, and does not repeat that on every one of 52,398 rows; a client defaults every row's `source` to this manifest's own top-level `source` field (`geoboundaries-cgaz`) instead of requiring the column. LIVE catalog mirror (portolan-mirrors/geoboundaries-catalog), not provisional. Three admin levels: 218 ADM0 units (198 country + 20 disputed-area DISP polygons), 3,224 ADM1 units, 49,349 ADM2-level boundary rows (of which 48,978 carry a name; the other 371 are ADM1/ADM0 rows carried down to fill ADM2 coverage, per the catalog's names/AGENTS.md -- those are never indexed, independent of the 37 dropped_unnamed below). `dropped_unnamed: 37` counts ADM2 rows whose upstream shapeName is NULL (24 Japan, 12 Turkmenistan, 1 China) and so cannot be found by name; they exist with geometry in adm2/cgaz_adm2.parquet. Level 0 (ADM0 + DISP) has no `shapeID` column at all in the CGAZ source -- not just null values, the column is absent from adm0/cgaz_adm0*.parquet's schema -- so `feature_id_column` is null for level 0 and `index_key_column: \"country\"` names which names-index column is the join key instead; it is matched against the boundary file's `country_column` (`shapeGroup`), which is the same ISO-3166-1-alpha-3 (or geoBoundaries disputed-area code) value the names index stores in its own `country` column. Every level has a `country_column` (`shapeGroup`) available for the two-level narrowing described in the design doc (`select()`'s resolution order); at level 0 it is also the join column itself. Levels 1 and 2 default `index_key_column` to `feature_id` (omitted here) and join on `feature_id_column: \"shapeID\"`. Level 2 now HAS a `display` entry, reversing an earlier decision that was right about the wrong quantity. The old reasoning was that ADM2's median unit is 82 coordinates, so decoding one is never slow -- true, and irrelevant, because a client does not decode one unit from an isolated byte range. hyparquet has no sub-chunk read, so fetching one ADM2 feature pulls that row group's whole geometry column chunk: measured against the live catalog, a median of 1.35 MB and 2.1 s, worst case 3.5 MB and 4.3 s. The cost is bytes per row group, and the tail is what fills a group (99th percentile 2,837 vertices, 14 rows above 20,000), not the median 82. `cgaz_adm2_display.parquet` cuts 12,980,126 vertices to 2,854,112 and a row group's geometry chunk from 325 KB to 151 KB, and every one of the 49,349 features still contains at least 99% of its true area (worst 99.1461%, Contla de Juan Cuamatzi, MEX). All three levels now have a display file, so `resolveResolutionMode` never has to fall back. `bbox` on the names index is float32, rounded outward (never narrower than the true extent) -- see \u00a76.2 amendment. None of the published parquet files (index or boundary) currently carry a `cnmw:catalog_version` footer key-value entry; `catalog_version` here is asserted from the catalog's own publish record (catalog.json `updated`), not cross-checked against parquet footer metadata. geocoder-core's version-skew check (design doc \u00a76.4) is therefore inert against this catalog today -- it neither errors nor warns, because `handle.catalogVersion` reads back `null` -- rather than silently wrong; feature identity is still safe because resolution always re-locates the row by key (shapeID, or shapeGroup at level 0) and never by a cached row offset. Boundary files are NOT globally sorted by (country, feature_id) the way design doc \u00a76.4 requests of the E2 mirror -- they are sorted by this catalog's own build order (AGENTS.md's `country_units`/compactness-oriented layout), so `country_column`/`feature_id_column` row-group statistics still narrow the candidate set (verified non-trivially) but not to a single group the way a fully sorted mirror would; correctness does not depend on the sort, because resolution falls back to scanning every candidate group and the exact match is a linear scan within each, but a client's per-select byte cost is higher than a globally-sorted mirror would need. `geometry_ref` (added 2026-11-12) is this catalog's answer to that cost: every names-index row carries a `{file, row_group, row}` pointer straight into its level's full-resolution boundary file -- `row` is the physical row offset captured directly off the published `cgaz_adm{level}.parquet` with DuckDB's `file_row_number`, and `row_group` is that offset floor-divided by this manifest's own `boundaries[].row_group_rows` (1/16/256 for ADM0/ADM1/ADM2, matching how `tools/build_boundaries.py` wrote those files -- retuned 2026-11-12 from 4/64/512, see below). It is advisory, never authoritative, exactly because the boundary files are Hilbert-sorted rather than sorted by (country, feature_id): a client reads the referenced row group, decodes the one row at `row`, and MUST verify that row's join key -- `shapeID` at levels 1/2, `shapeGroup` at level 0 -- equals the result's own key before trusting its geometry; on any mismatch (stale `geometry_ref`, a rebuilt boundary file, a version-skewed cache) it must fall back to the stats-pruning scan described above, never trust the hint. Because the display files are row-aligned with the full files at every level -- same row count, same row order, same row group boundaries, verified per level by `tools/build_display.py` and sampled by `tests/test_index_refs.py` for all three -- the same `row`/`row_group` resolves against either file, so a client need not recompute anything when switching between 'display' and 'full' resolution. Every file entry also carries two exact metadata sizes so the first read of a file is never a guess: `footer_bytes` is the whole trailing span, thrift footer plus page index, so one range request of exactly that many bytes from the end of the file leaves a client holding all of the file's metadata; `footer_metadata_bytes` is the thrift footer alone, which is the minimum a reader needs to locate row groups and is what a hyparquet client should ask for, because hyparquet has no sub-chunk read and never reads the page index bodies. Without these a client pays hyparquet's speculative 512 KiB tail on the first select against every file -- measured on the live catalog as 524,288 bytes against a real need of 90,369 on ADM0 -- and on any file whose footer exceeds 512 KiB it pays a second round trip as well. The row group sizes were retuned on 2026-11-12 by minimizing (trailing bytes + one row group), which is what a first select costs: ADM0 4 -> 1 row per group, ADM1 64 -> 16, ADM2 512 -> 256, with row group statistics restricted to the columns a client can actually prune on (`shapeID`, `shapeGroup` and the four `bbox` leaves). Restricting the statistics is what made the smaller groups affordable: on ADM2 at 256 rows it cut the trailing bytes from 670,381 to 346,581. See catalog AGENTS.md and the per-collection AGENTS.md files for the full facts this manifest was built from."
 }

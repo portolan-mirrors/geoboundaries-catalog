@@ -24,29 +24,37 @@ and changes no geometry.
 
 | collection | rows | GeoParquet | PMTiles |
 |---|---|---|---|
-| `adm0` | 218 | 97 MB, 55 row groups of 4 rows | 7.1 MB, z0-6 |
-| `adm1` | 3,224 | 76 MB, 51 row groups of 64 rows | 17 MB, z0-7 |
-| `adm2` | 49,349 | 101 MB, 97 row groups of 512 rows | 101 MB, z0-9 |
+| `adm0` | 218 | 104 MB, 218 row groups of 1 row | 7.1 MB, z0-6 |
+| `adm1` | 3,224 | 81 MB, 202 row groups of 16 rows | 17 MB, z0-7 |
+| `adm2` | 49,349 | 104 MB, 193 row groups of 256 rows | 101 MB, z0-9 |
 | `names` | 52,398 | 3.9 MB, 35 row groups of 1,536 rows | 12 MB, z0-8 |
 
-`adm0` and `adm1` each carry a second GeoParquet file, `*_display.parquet`,
-with the same rows in the same order and the same row group boundaries, and
-geometry simplified and buffered outward: 7.4 MB and 13.3 MB against 96.6 MB
-and 75.0 MB. ADM2 has none, because its geometry is already simplified
-upstream and its median unit is 82 coordinates.
+Every boundary collection carries a second GeoParquet file,
+`*_display.parquet`, with the same rows in the same order and the same row
+group boundaries, and geometry simplified and buffered outward: 7.5 MB, 13 MB
+and 42 MB against 104 MB, 81 MB and 104 MB. ADM2 gained its display file on
+2026-11-12, reversing an earlier decision that was right about the wrong
+quantity: ADM2 geometry is already simplified upstream, so *decoding* one unit
+was never slow, but a browser does not decode one unit from an isolated byte
+range — it pulls the whole row group's geometry column chunk, and that was a
+median of 1.35 MB and 2.1 s against the live catalog.
 
-The three boundary levels cover the globe seamlessly. `names` is a search
-sidecar: one row per named unit across all three levels, sorted by a folded
-form of the name, built so a static browser client can turn a typed name into a
+The three boundary levels cover the globe seamlessly. `names` is the gazetteer
+index: one row per named unit across all three levels, sorted by a folded form
+of the name, built so a static browser client can turn a typed name into a
 `shapeID`, an extent and a point.
 
 **The row group sizes are the reason this catalog exists.** The CGAZ mirror it
 replaces put all 49,349 ADM2 rows in one row group, so fetching a single
-municipality's geometry meant reading the whole geometry column chunk. Each
-level here gets a row group size measured from its own compressed bytes per
-row, landing every group between 1.0 and 1.8 MB, with GeoParquet 1.1 bbox
-covering metadata, a Hilbert row order and a Parquet page index on every
-column so a reader can find the right group without decoding any geometry.
+municipality's geometry meant reading the whole geometry column chunk.
+hyparquet, the reader a browser uses, has no sub-chunk read, so one feature
+costs one row group — but shrinking row groups is not free, because the
+trailing metadata a client reads before any data carries one record per column
+per row group. Each level's size therefore minimizes the sum of the two, which
+is what a client's first select costs: `tools/rowgroup_sweep.py` chose 1, 16
+and 256 rows. GeoParquet 1.1 bbox covering metadata, a Hilbert row order and a
+Parquet page index on every column let a reader find the right group without
+decoding any geometry.
 
 ## Build it
 
@@ -59,7 +67,7 @@ in a sibling directory, `../geoboundaries-staging`, which
 python3 tools/fetch_sources.py      # 547 MB of GeoPackages from upstream
 python3 tools/build_boundaries.py   # -> 3 GeoParquet files, ~70 s
 python3 tools/build_names.py        # -> the search index, ~5 s
-python3 tools/build_display.py      # -> 2 display sidecars, ~30 s
+python3 tools/build_display.py      # -> 3 display sidecars
 python3 tools/build_pmtiles.py      # -> 4 PMTiles archives, ~12 min
 python3 tools/make_styles.py        # -> 15 style JSONs, into catalog/
 python3 tools/make_thumbnails.py    # -> 4 thumbnails, into catalog/

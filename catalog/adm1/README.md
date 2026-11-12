@@ -11,10 +11,10 @@ producer and the authoritative source.
 | | |
 |---|---|
 | Rows | 3,224 (3,202 `ADM1`, 20 `DISP`, 2 `ADM0`) |
-| GeoParquet | 76 MB, 51 row groups of 64 rows, zstd, bbox covering |
+| GeoParquet | 81 MB, 202 row groups of 16 rows, zstd, bbox covering |
 | PMTiles | 17 MB, zoom 0-7 |
 | CRS | CRS84 (EPSG:4326), as published |
-| Vertices | 8,830,663, a mean of 2,739 per unit |
+| Vertices | 8,644,779 as published, a mean of 2,681 per unit (The upstream GeoPackage holds 8,830,663; this catalog publishes fewer because `ST_MakeValid` drops degenerate vertices from the geometry it repairs) |
 
 ## How these polygons were made
 
@@ -38,12 +38,15 @@ what you are looking at.
 `cgaz_adm1_display.parquet` holds **the same rows in the same order with the
 same row group boundaries** as the data file, with geometry simplified and
 then buffered outward by the same distance. Row *i* and row group *g* mean the
-same unit in both, so one byte-range plan serves either.
+same unit in both, so one byte-range plan serves either. It is 13 MB against
+the data file's 81 MB, and one unit's outline costs about 39 KB there against
+251 KB in the data file.
 
 Use it to draw an outline, and to pre-filter another dataset to this unit. The
 outward bias is deliberate: a filter shape that sits inside the true boundary
 silently drops features along the edge, and over-fetching is cheap. Every
-feature retains at least 99.87% of its original area.
+feature retains at least 99.87% of its original area, the worst case being the
+Gilbert Islands (KIR) at 99.8714%.
 
 Do **not** measure area from it, do not use it to decide which side of a
 border a point falls on, and do not publish it as a boundary: neighbouring

@@ -2,7 +2,7 @@
 
 > A mirror of geoBoundaries' Comprehensive Global Administrative Zones (CGAZ)
 > composite as cloud-native GeoParquet and PMTiles: 218 country polygons, 3,224
-> first-level units, 49,349 second-level units, plus a 3.6 MB name search index
+> first-level units, 49,349 second-level units, plus a 3.9 MB gazetteer index
 > across all three levels. Static files on object storage, no API, no
 > credentials. Produced by geoBoundaries at William & Mary geoLab; this catalog
 > republishes, it does not produce.
@@ -32,10 +32,10 @@ is in changes-from-upstream.md.
 
 ## Collections
 
-- [adm0 — Country Boundaries](https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm0/collection.json): 218 rows, 97 MB GeoParquet, 55 row groups of 4 rows. [agent guide](https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm0/AGENTS.md)
-- [adm1 — First-Level Administrative Boundaries](https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm1/collection.json): 3,224 rows, 76 MB, 51 row groups of 64 rows. [agent guide](https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm1/AGENTS.md)
-- [adm2 — Second-Level Administrative Boundaries](https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm2/collection.json): 49,349 rows, 101 MB, 97 row groups of 512 rows. [agent guide](https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm2/AGENTS.md)
-- [names — Name Search Index](https://data.source.coop/portolan-mirrors/geoboundaries-catalog/names/collection.json): 52,398 rows, 3.6 MB, sorted by folded name, 35 row groups of 1,536 rows. [agent guide](https://data.source.coop/portolan-mirrors/geoboundaries-catalog/names/AGENTS.md)
+- [adm0 — Country Boundaries](https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm0/collection.json): 218 rows, 104 MB GeoParquet, 218 row groups of 1 row. [agent guide](https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm0/AGENTS.md)
+- [adm1 — First-Level Administrative Boundaries](https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm1/collection.json): 3,224 rows, 81 MB, 202 row groups of 16 rows. [agent guide](https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm1/AGENTS.md)
+- [adm2 — Second-Level Administrative Boundaries](https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm2/collection.json): 49,349 rows, 104 MB, 193 row groups of 256 rows. [agent guide](https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm2/AGENTS.md)
+- [names — Name Search Index](https://data.source.coop/portolan-mirrors/geoboundaries-catalog/names/collection.json): the gazetteer index, 52,398 rows, 3.9 MB, sorted by folded name, 35 row groups of 1,536 rows. [agent guide](https://data.source.coop/portolan-mirrors/geoboundaries-catalog/names/AGENTS.md)
 
 ## Data files
 
@@ -45,6 +45,7 @@ is in changes-from-upstream.md.
 - https://data.source.coop/portolan-mirrors/geoboundaries-catalog/names/cgaz_names.parquet
 - https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm0/cgaz_adm0_display.parquet (simplified, outward-buffered; same rows and row groups as the full-resolution file)
 - https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm1/cgaz_adm1_display.parquet (same)
+- https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm2/cgaz_adm2_display.parquet (same)
 - https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm0/adm0.pmtiles
 - https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm1/adm1.pmtiles
 - https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm2/adm2.pmtiles
@@ -82,4 +83,4 @@ ORDER BY level;
 - [Source repository](https://github.com/portolan-mirrors/geoboundaries-catalog): the pipeline that built this catalog, the per-collection `.portolan/metadata.yaml` provenance records, and the issue tracker.
 - [Runfola et al. (2020)](https://doi.org/10.1371/journal.pone.0231866): the paper geoBoundaries asks you to cite.
 - [Portolan specification](https://github.com/portolan-sdi/portolan-spec): what this catalog conforms to.
-- [cn-geocoder-overture](https://github.com/portolan-mirrors/cn-geocoder-overture): an experimental sibling catalog built from Overture Maps divisions, with city and locality coverage and multilingual names. Same column contract, ODbL rather than CC BY, so share-alike rather than attribution-only.
+- [cn-gazetteer-overture](https://github.com/portolan-mirrors/cn-gazetteer-overture): an experimental sibling catalog built from Overture Maps divisions, with city and locality coverage and multilingual names. Same column contract, ODbL rather than CC BY, so share-alike rather than attribution-only.

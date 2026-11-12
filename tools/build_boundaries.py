@@ -37,6 +37,7 @@ import pyarrow.parquet as pq
 from gbcommon import (
     LEVELS,
     repair_name_column,
+    PRUNABLE_STATS,
     PUBLISH,
     ROW_GROUP_ROWS,
     WORK,
@@ -45,6 +46,7 @@ from gbcommon import (
     gpkg_layer,
     run,
     source_path,
+    trailing_bytes,
 )
 
 # Source attribute columns, in the order the upstream GeoPackage declares them
@@ -158,7 +160,15 @@ def derive_and_sort(level: int) -> pa.Table:
 
     con = duckdb.connect()
     con.execute("INSTALL spatial; LOAD spatial;")
-    con.execute("SET preserve_insertion_order = false;")
+    # The row order of a boundary file is a published contract: the names
+    # index's `geometry_ref` names a row number in it and each display file
+    # has to hold the same rows at the same offsets. `preserve_insertion_order
+    # = false` lets the result collector emit an ORDER BY's batches out of
+    # order on a parallel scan, which would make a rebuild silently reorder
+    # rows -- the exact failure the sibling Overture catalog hit on 4,724
+    # locality rows. Forced on for this query, and the ORDER BY below carries
+    # a tiebreaker for the same reason.
+    con.execute("SET preserve_insertion_order = true;")
     sql = f"""
     WITH raw AS (
       SELECT shapeName, {shape_id}, shapeGroup, shapeType, geometry
@@ -214,7 +224,15 @@ def derive_and_sort(level: int) -> pa.Table:
       }} AS bbox,
       ST_AsWKB(geometry) AS geometry
     FROM measured
-    ORDER BY ST_Hilbert(geometry, {GLOBAL_BOUNDS})
+    -- The Hilbert key alone is not a total order: two units with the same
+    -- key would be ordered arbitrarily and differently on each rebuild, and
+    -- a rebuild that reorders rows stales every display file and every
+    -- geometry_ref at once. The tiebreaker makes the order total --
+    -- shapeGroup + shapeName is unique at level 0, where CGAZ has no
+    -- shapeID, and shapeID is unique at levels 1 and 2 -- so the same
+    -- sources produce the same file.
+    ORDER BY ST_Hilbert(geometry, {GLOBAL_BOUNDS}), shapeGroup, shapeName,
+             shapeID
     """
     repaired = con.execute(
         f"SELECT count(*) FROM read_parquet('{src}') "
@@ -252,16 +270,28 @@ def write_optimized(level: int, table: pa.Table) -> None:
         compression="zstd",
         compression_level=ZSTD_LEVEL,
         row_group_size=ROW_GROUP_ROWS[level],
-        write_statistics=True,
+        # Statistics only where a client can prune. See
+        # gbcommon.PRUNABLE_STATS: at these row group sizes the footer is a
+        # term in every first select, and statistics on a Hilbert-sorted
+        # file's name and measure columns prune nothing.
+        write_statistics=PRUNABLE_STATS,
         write_page_index=True,
         version="2.6",
     )
     meta_out = pq.ParquetFile(out).metadata
     size = out.stat().st_size
+    footer, page_index = trailing_bytes(out)
     print(
         f"  ADM{level}: {out.name} {size:,} bytes, "
-        f"{meta_out.num_rows:,} rows, {meta_out.num_row_groups} row groups, "
-        f"{size / meta_out.num_row_groups / 1e6:.2f} MB per group"
+        f"{meta_out.num_rows:,} rows, {meta_out.num_row_groups} row groups of "
+        f"{ROW_GROUP_ROWS[level]:,}, "
+        f"{(size - footer - page_index) / meta_out.num_row_groups / 1e3:.0f} KB "
+        "per group"
+    )
+    print(
+        f"  trailing metadata: {footer + page_index:,} bytes "
+        f"(footer {footer:,} + page index {page_index:,}) -- published as "
+        "footer_bytes"
     )
     print(f"  bbox: {json.dumps([round(v, 6) for v in bbox])}")
 

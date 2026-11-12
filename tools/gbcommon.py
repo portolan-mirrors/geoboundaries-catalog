@@ -53,11 +53,74 @@ def gpkg_layer(level: int) -> str:
     return f"globalADM{level}"
 
 
-# Rows per row group, chosen per level from the measured compressed bytes per
-# row so that one row group is roughly 1.5-2 MB and a client that wants one
-# unit's geometry fetches about that much. See tools/build_boundaries.py for
-# the measurement and docs/pipeline.md for the numbers.
-ROW_GROUP_ROWS = {0: 4, 1: 64, 2: 512}
+# Rows per row group, per level. This is the most consequential number in the
+# catalog, because hyparquet -- the reader a browser uses -- has no sub-chunk
+# read: asking for row 3 of a 512-row group fetches that group's whole
+# geometry column chunk. One feature costs one row group, so the group size
+# *is* the per-feature cost.
+#
+# Shrinking the groups is not free. Parquet's footer carries one thrift record
+# per column per row group and the page index one entry per page per column
+# per row group; both sit at the end of the file and a range client reads them
+# before any data. Halving the group size doubles them. A client pays two
+# terms:
+#
+#     first select  = trailing bytes (footer + page index) + one row group
+#     later selects =                                        one row group
+#
+# A geocoder session resolves one feature far more often than ten, so these
+# minimize the first. `tools/rowgroup_sweep.py` produced the table, measured
+# against the published files with statistics restricted to PRUNABLE_STATS:
+#
+#   level  rows/grp  groups  trailing  geom/grp  first select
+#   ADM0          1     218   348,440   253,427       601,867  <- chosen
+#   ADM0          2     109   175,837   737,734       913,571
+#   ADM0          4      55    90,369 1,453,199     1,543,568  (shipped before)
+#   ADM1          8     403   701,108    90,209       791,317
+#   ADM1         16     202   353,080   223,000       576,080  <- chosen
+#   ADM1         32     101   177,863   436,226       614,089
+#   ADM1         64      51    93,073   962,786     1,055,859  (shipped before)
+#   ADM2        128     386   690,487   160,070       850,557
+#   ADM2        256     193   346,581   324,655       671,236  <- chosen
+#   ADM2        512      97   175,681   654,394       830,075  (shipped before)
+#
+# The cost is file size: smaller groups compress worse, so ADM0 grows about
+# 7.9%, ADM1 7.5% and ADM2 3.8%. These files exist to be range-read one
+# feature at a time from a browser. The whole-file download is the secondary
+# use, and the upstream GeoPackage serves it better anyway -- see the README's
+# "The upstream data vs our optimized files".
+#
+# ADM0 at one row per group is deliberate rather than degenerate: there are
+# 218 countries, a country is the unit a client asks for, and one row group
+# per country is 218 groups. `gpio check` warns about it; see
+# docs/conformance.md.
+ROW_GROUP_ROWS = {0: 1, 1: 16, 2: 256}
+
+# The columns that get row group statistics in the boundary and display files.
+#
+# Everything else is footer bytes that buy nothing. These files are
+# Hilbert-sorted, so `shapeName`, `area_km2`, `perimeter_km`, `compactness`,
+# `country_units` and `shapeType` have min/max ranges overlapping across
+# essentially every row group -- a client cannot prune on them -- while a min
+# and a max of `shapeName` is two strings per group per file. Measured on ADM2
+# at 256 rows per group: restricting statistics to this list cut the trailing
+# bytes from 670,381 to 346,581, which is 324 KB off every client's first
+# select.
+#
+# The `bbox` entries are the struct's **leaf** paths. PyArrow matches
+# `write_statistics` against the leaf path, not the top-level column, so
+# listing `"bbox"` silently drops statistics from all four leaves -- and those
+# four are the GeoParquet 1.1 covering, the only spatial pruning these files
+# offer. Measured the wrong way round once; the four leaves are four doubles
+# per group and load-bearing.
+PRUNABLE_STATS = [
+    "shapeID",
+    "shapeGroup",
+    "bbox.xmin",
+    "bbox.ymin",
+    "bbox.xmax",
+    "bbox.ymax",
+]
 
 # The search index is sorted by name_norm, so a client that wants a name
 # prefix fetches a contiguous run of row groups. The target is bytes, not
@@ -193,6 +256,46 @@ def shrink_bbox_float32(bbox_array):
         ],
         names=["xmin", "ymin", "xmax", "ymax"],
     )
+
+
+def trailing_bytes(path: Path) -> tuple[int, int]:
+    """``(footer_metadata, page_index)`` -- the two metadata spans at the end.
+
+    Parquet writes the page index after the last row group and the thrift
+    footer after that, so everything from the end of the last column chunk's
+    pages to EOF is metadata and nothing else. A client that fetches that
+    whole span in one exactly-sized request holds the footer *and* the page
+    index and needs no second round trip. That total is what
+    ``names/index.json`` publishes as ``footer_bytes``.
+
+    The first element is the thrift footer alone -- the ``FileMetaData``
+    message plus its four-byte length and the trailing ``PAR1``. It is the
+    *minimum* exact tail a reader needs, and it is published separately as
+    ``footer_metadata_bytes`` because hyparquet never reads the page index
+    bodies: it has no sub-chunk read, so a hyparquet client can ask for this
+    smaller number and skip the page index entirely. Both numbers are exact,
+    so either way the read is one request rather than hyparquet's speculative
+    512 KiB tail.
+
+    ``file_offset`` is optional in the format and PyArrow writes 0 for it, so
+    a chunk's start is taken from its dictionary page where it has one and
+    from its first data page otherwise.
+    """
+    import pyarrow.parquet as pq
+
+    md = pq.ParquetFile(path).metadata
+    last = md.row_group(md.num_row_groups - 1)
+    end_of_data = 0
+    for i in range(last.num_columns):
+        col = last.column(i)
+        start = col.dictionary_page_offset or col.data_page_offset
+        end_of_data = max(end_of_data, start + col.total_compressed_size)
+    size = path.stat().st_size
+    with path.open("rb") as fh:
+        fh.seek(-8, 2)
+        metadata_len = int.from_bytes(fh.read(8)[:4], "little")
+    footer = metadata_len + 8
+    return footer, size - end_of_data - footer
 
 
 def geo_metadata(

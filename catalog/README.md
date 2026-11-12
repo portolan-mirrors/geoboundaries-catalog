@@ -19,12 +19,12 @@ the authoritative source.
 
 Four collections.
 
-| collection | rows | size | what it is |
-|---|---|---|---|
-| `adm0` | 218 | 97 MB | Country outlines, plus 20 disputed areas |
-| `adm1` | 3,224 | 76 MB | States, provinces, regions, governorates |
-| `adm2` | 49,349 | 101 MB | Counties, districts, municipalities, communes |
-| `names` | 52,398 | 3.9 MB | A name search index across all three levels |
+| collection | rows | full | display | what it is |
+|---|---|---|---|---|
+| `adm0` | 218 | 104 MB | 7.5 MB | Country outlines, plus 20 disputed areas |
+| `adm1` | 3,224 | 81 MB | 13 MB | States, provinces, regions, governorates |
+| `adm2` | 49,349 | 104 MB | 42 MB | Counties, districts, municipalities, communes |
+| `names` | 52,398 | 3.9 MB | — | A name search index across all three levels |
 
 The three boundary levels cover the globe seamlessly: every one of the 218
 country codes appears at every level, because where a country has no
@@ -32,36 +32,92 @@ first- or second-level data CGAZ carries its coarser polygon up instead. The
 `shapeType` column says which you are actually looking at.
 
 Each boundary collection is GeoParquet 1.1 with bbox covering metadata, sorted
-along a Hilbert curve, and cut into small row groups — 55, 51 and 97 of them —
-so a client can fetch one unit's geometry in a range request of about 1 to
-1.8 MB instead of pulling the whole file.
+along a Hilbert curve, and cut into small row groups — 218, 202 and 193 of
+them, holding 1, 16 and 256 rows — so a client fetches one unit's geometry in
+a single range request of 250 to 325 KB instead of pulling the whole file. At
+ADM0 that is one row group per country.
 
 `names` is the piece built for autocomplete: one row per named unit, sorted by
 a folded form of the name, 3.9 MB in total. Load it whole in about a quarter of
 a second, or resolve a typed prefix from one or two 109 KiB row groups by range
 request. It carries the `shapeID` that joins back to the geometry, the extent
-to fly a map to, and a count of how many other units share the same name.
+to fly a map to, a `geometry_ref` pointer straight at the row group holding the
+geometry, and a count of how many other units share the same name.
 
 A PMTiles archive accompanies every collection, for drawing many units at once.
 
-The `adm0` and `adm1` collections also carry a **display** file: the same rows
-in the same order with simplified geometry, for drawing one unit's outline
-without decoding a quarter of a megabyte of coordinates. Canada is 528,021
-coordinates at full resolution and 68,973 in the display file. There is no
-ADM2 display file, because ADM2 geometry is already simplified upstream — its
-median unit is 82 coordinates — and nothing there was slow.
+**Every** boundary collection carries a **display** file: the same rows in the
+same order in the same row groups, with simplified geometry, for drawing one
+unit's outline without fetching the full-resolution row group. One country's
+outline is about 10 KB there against 250 KB in the full file, one ADM1 unit
+37 KB against 220 KB, one ADM2 unit 151 KB against 325 KB. Canada is 528,021
+coordinates at full resolution and 68,973 in the display file.
+
+ADM2 gained its display file on 2026-11-12, reversing an earlier decision that
+was right about the wrong quantity. ADM2 geometry is already simplified
+upstream — its median unit is 82 coordinates — so *decoding* one was never
+slow. But a browser does not decode one unit from an isolated byte range:
+hyparquet has no sub-chunk read, so fetching one ADM2 feature pulls that row
+group's entire geometry column chunk, and against the live catalog that was a
+median of 1.35 MB and 2.1 seconds, worst case 3.5 MB and 4.3 seconds. The cost
+was bytes per row group, and it is the tail that fills a row group — the 99th
+percentile at 2,837 coordinates and the 14 units above 20,000 — not the median
+82.
 
 **The display geometry is buffered outward** by the distance it was simplified
 by, so it contains the true boundary rather than cutting inside it. That makes
 it safe to use as a spatial filter for downloading some *other* dataset: you
 over-fetch a little rather than silently dropping features along the edge.
-Every feature retains at least 99.87% of its original area. The cost is that
+Every feature at every level retains at least 99% of its original area — worst
+cases 99.95% at ADM0, 99.87% at ADM1 and 99.15% at ADM2. The cost is that
 neighbouring units overlap in the margin, so it is a display and filter shape,
 not a cartographic boundary. Do not measure area from it.
 
 Per-country geoBoundaries releases (`gbOpen`, `gbHumanitarian`,
 `gbAuthoritative`) are **not** mirrored here. Those are full-resolution and
 represent each country as it represents itself; CGAZ is a different product.
+
+## The upstream data vs our optimized files — why both exist and when to use which
+
+Every collection here links the **upstream GeoPackage** it was built from, as
+a `source-gpkg` asset pointing at
+`github.com/wmgeolab/geoBoundaries/raw/main/releaseData/CGAZ/`, with the size
+and SHA-256 of the exact bytes this build consumed. The `names` collection
+links all three, because it is derived from all three levels. Nothing here
+asks you to take this mirror's word for its own contents.
+
+**Use the upstream GeoPackages when** you want the authoritative bytes, a
+whole level at once for analysis in QGIS or GDAL or DuckDB, a format this
+catalog does not publish, or a second opinion on anything this catalog claims.
+They are the product of record: geoBoundaries publishes them, cites them, and
+is who you should credit.
+
+**Use the files here when** a browser is doing the reading. That is the only
+thing they are better at, and they are much better at it:
+
+| | upstream CGAZ GeoPackage | this catalog |
+|---|---|---|
+| format | GeoPackage (SQLite) | GeoParquet 1.1, zstd, with bbox covering |
+| one unit's geometry | read the whole file | one range request, 10–325 KB |
+| find a place by name | scan the layer | sorted name index, 3.9 MB or one 109 KiB row group |
+| row groups | n/a | 1, 16 and 256 rows, sized by what one select costs |
+| footer read | n/a | exact `footer_bytes` in `names/index.json`, one request |
+| simplified outlines | none | a display file per level, buffered outward |
+| tiles | none | PMTiles per collection |
+| CRS | declared `srs_id = 0` | EPSG:4326 assigned |
+| names | 38 rows double-encoded | repaired |
+| geometry | 843 invalid polygons | repaired with `ST_MakeValid` |
+
+A GeoPackage is a SQLite database. It has no HTTP range story at all: a
+browser cannot ask it for one country without downloading all 155 MB, and
+there is no column-chunk layout to ask with. That — not reachability, and not
+anything wrong with the upstream files — is why these exist.
+
+The repairs in the last three rows are the one place this catalog is *not* a
+faithful mirror, and they are why you should read
+[changes-from-upstream.md](changes-from-upstream.md) before you treat anything
+here as vanilla geoBoundaries. Each one is recorded there with how to
+reproduce it and how to get the upstream behaviour back.
 
 ## License
 
@@ -147,6 +203,18 @@ and
 This catalog is shaped for a static client with no server — the search half of
 a geocoder, running entirely on range requests. End to end:
 
+0. **Fetch [`names/index.json`](names/index.json) first.** It is a few
+   kilobytes and it carries every number the rest of this list needs: the URL,
+   size, row count, row group count and `row_group_rows` of every file, and
+   two exact metadata sizes per file. `footer_bytes` is the whole trailing
+   span, thrift footer plus page index, so one range request of exactly that
+   many bytes from the end of a file leaves you holding all its metadata.
+   `footer_metadata_bytes` is the thrift footer alone, which is the minimum a
+   reader needs to locate row groups, and it is what a hyparquet client should
+   ask for — hyparquet has no sub-chunk read, so it never touches the page
+   index. Pass one of them as `initialFetchSize`. Without it hyparquet
+   speculates a 512 KiB tail on the first read of every file, which measured
+   against this catalog is 524,288 bytes fetched where ADM0 needs 90,369.
 1. **Load the name index** when the search box takes focus. `names` is 3.9 MB
    and reads in about 120 ms for the columns a search needs. Below about 5 MB
    that is the right call; above it, the file is sorted so a typed prefix maps
@@ -154,11 +222,15 @@ a geocoder, running entirely on range requests. End to end:
 2. **Match the prefix** on `name_norm`, which is case-folded and
    accent-stripped, so `zurich` finds `Zürich`. Rank on `area_km2`,
    disambiguate with `name_dupes` and `country_name`.
-3. **Take `shape_id` and `level`** from the hit.
-4. **Draw the outline from the display file** at once, or move the camera from
-   the index's own `bbox`.
+3. **Take `shape_id`, `level` and `geometry_ref`** from the hit. `geometry_ref`
+   names the file, the row group and the row — so there is no search to do,
+   only a read. It is advisory: verify the `shapeID` (or `shapeGroup` at level
+   0) of the row you decode before you trust its geometry.
+4. **Draw the outline from the display file** at once — one range request of
+   10 KB at ADM0, 37 KB at ADM1, 151 KB at ADM2 — or move the camera from the
+   index's own `bbox` while it arrives.
 5. **Fetch full resolution in the background** when the user is going to
-   export, clip or measure — one range request of 1 to 1.8 MB.
+   export, clip or measure — one range request of 250 to 325 KB.
 6. **Use the boundary to filter another dataset.** This is what the outward
    buffer is for.
 
@@ -168,7 +240,7 @@ recipe, is in [AGENTS.md](AGENTS.md) and
 
 ## A sibling catalog
 
-[cn-geocoder-overture](https://github.com/portolan-mirrors/cn-geocoder-overture)
+[cn-gazetteer-overture](https://github.com/portolan-mirrors/cn-gazetteer-overture)
 is an **experimental** sibling built to the same shape from Overture Maps
 divisions. It goes below the second administrative level to cities and
 localities, and carries names in many languages where geoBoundaries carries

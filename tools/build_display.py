@@ -53,20 +53,34 @@ import duckdb
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
-from gbcommon import PUBLISH, ROW_GROUP_ROWS, ZSTD_LEVEL, geo_metadata
+from gbcommon import (
+    PRUNABLE_STATS,
+    PUBLISH,
+    ROW_GROUP_ROWS,
+    ZSTD_LEVEL,
+    geo_metadata,
+    trailing_bytes,
+)
 
 # Simplification tolerance in degrees, per level, chosen with --measure. See
 # docs/changes-from-upstream.md for the sweep these came from.
 #
-# ADM2 has no display file, and that is a measurement rather than an
-# omission. Its geometry is already simplified by geoBoundaries: the median
-# unit is 82 vertices, the 90th percentile 560 and the 99th 2,837, and only
-# 14 rows of 49,349 exceed 20,000. Decoding one unit from the full-resolution
-# file is already well under a millisecond. Any tolerance coarse enough to
-# shrink the file meaningfully also puts a buffer of a kilometre or more
-# around units that are only a few kilometres across, which is a poor trade
-# for a level where nothing was slow.
-TOLERANCE = {0: 0.01, 1: 0.01}
+# **Why ADM2 now has a display file.** The first pass left it out, and the
+# reasoning was sound about the wrong quantity. ADM2 geometry is already
+# simplified upstream -- median 82 vertices, 90th percentile 560 -- so
+# *decoding* one unit was never slow, and that is what the old comment here
+# measured. But a client does not decode one unit from an isolated byte range.
+# hyparquet has no sub-chunk read, so fetching one ADM2 feature pulls that row
+# group's whole geometry column chunk: measured against the live catalog, a
+# median of 1.35 MB and 2.1 s, worst case 3.5 MB and 4.3 s. The cost was never
+# vertices per feature, it was **bytes per row group read**, and it is the tail
+# that fills a group -- the 99th percentile at 2,837 vertices and the 14 rows
+# above 20,000, not the median 82.
+#
+# Simplifying ADM2 at the tolerance below cuts 12,980,126 vertices to
+# 2,854,112, a 4.5x reduction, and a 256-row group's geometry chunk from
+# 324,655 bytes to about 155,000. That is the file this level was missing.
+TOLERANCE = {0: 0.01, 1: 0.01, 2: 0.01}
 
 # Quadrant segments for the outward buffer. The default of 8 rounds every
 # corner with eight segments and inflates the vertex count past what
@@ -77,6 +91,7 @@ QUADRANT_SEGMENTS = 2
 IDENTITY = {
     0: ["shapeName", "shapeGroup", "shapeType"],
     1: ["shapeName", "shapeID", "shapeGroup", "shapeType"],
+    2: ["shapeName", "shapeID", "shapeGroup", "shapeType"],
 }
 
 
@@ -88,16 +103,46 @@ def source(level: int) -> str:
 # size. A flat 0.01 degrees is about 1.1 km, which is nothing against a
 # country and almost everything against Sliema, a Maltese local council 1.3
 # km2 in area: a flat tolerance cost it 8% of its area and Baiti in Nauru
-# 9%. Scaling by sqrt(area)/25 keeps the displacement under about 4% of a
-# unit's width whatever its size, and leaves large units on the flat 0.01.
+# 9%. Scaling by sqrt(area)/DIVISOR keeps the displacement under 1/DIVISOR of
+# a unit's width whatever its size, and leaves large units on the flat 0.01.
 # The floor stops a degenerate zero-area row collapsing the expression.
 PER_FEATURE_TOLERANCE = (
-    "greatest(1e-6, least({tol}, sqrt(ST_Area(geometry)) / 25))"
+    "greatest(1e-6, least({tol}, sqrt(ST_Area(geometry)) / {divisor}))"
 )
 
+# The denominator of that fraction, per level: the outline may move by at most
+# 1/DIVISOR of sqrt(area). 25 is 4% of a unit's width, and is what ADM0 and
+# ADM1 ship.
+#
+# ADM2 uses 18, about 5.6%, and the extra came from the byte budget: a 256-row
+# group has to land near 150 KB for the file to be worth fetching at all, and
+# 25 left the median group at 165 KB. The sweep over all 49,349 features, with
+# "worst" the smallest fraction of any one unit's true area that its display
+# polygon still contains:
+#
+#   divisor  file size  vertices   geom/grp median  worst containment  <99%
+#        25   44.92 MB  3,035,819         165 KiB           99.332%       0
+#        20   43.11 MB  2,903,755         156 KiB           99.042%       0
+#        18   42.42 MB  2,854,112         151 KiB           99.146%       0  <-
+#        16   41.79 MB  2,807,029         147 KiB           98.883%       1
+#        15   41.50 MB  2,784,942         146 KiB           99.050%       0
+#
+# Containment is not monotonic in the divisor -- 16 drops one feature below
+# 99% where 15 drops none -- because a coarser simplification can remove the
+# very vertex whose corner the buffer then fails to cover. That is a reason to
+# stop at the first divisor that meets the byte target with margin rather than
+# to ride the aggressive end of a non-monotonic curve, which is why this is 18
+# and not 15.
+#
+# ST_ReducePrecision was tried as a cheaper lever -- snapping coordinates to a
+# grid makes the float64 mantissas repetitive and compresses far better -- and
+# rejected: it raises `TopologyException: side location conflict` on the ADM2
+# geometry at both 1e-4 and 3e-4.
+TOLERANCE_DIVISOR = {0: 25, 1: 25, 2: 18}
 
-def display_geometry_sql(tol: float) -> str:
-    t = PER_FEATURE_TOLERANCE.format(tol=tol)
+
+def display_geometry_sql(tol: float, divisor: int = 25) -> str:
+    t = PER_FEATURE_TOLERANCE.format(tol=tol, divisor=divisor)
     return f"ST_Buffer(ST_SimplifyPreserveTopology(geometry, {t}), {t}, {QUADRANT_SEGMENTS})"
 
 
@@ -122,7 +167,7 @@ def measure(level: int, tolerances: list[float]) -> None:
         f"max {base[2]:,} per feature"
     )
     for tol in tolerances:
-        geom = display_geometry_sql(tol)
+        geom = display_geometry_sql(tol, TOLERANCE_DIVISOR[level])
         row = con.execute(
             f"""WITH d AS (SELECT {geom} AS g, geometry AS o
                            FROM read_parquet('{src}'))
@@ -141,10 +186,14 @@ def measure(level: int, tolerances: list[float]) -> None:
 
 def build(level: int) -> None:
     tol = TOLERANCE[level]
+    divisor = TOLERANCE_DIVISOR[level]
     src = source(level)
     cols = IDENTITY[level]
-    geom = display_geometry_sql(tol)
-    print(f"ADM{level}: display geometry, tolerance {tol} degrees")
+    geom = display_geometry_sql(tol, divisor)
+    print(
+        f"ADM{level}: display geometry, tolerance {tol} degrees capped at "
+        f"sqrt(area)/{divisor}"
+    )
 
     con = connect()
     table = con.execute(
@@ -184,7 +233,11 @@ def build(level: int) -> None:
         # The same row group size as the full-resolution file, so row group g
         # holds the same rows in both and a client can plan one set of ranges.
         row_group_size=ROW_GROUP_ROWS[level],
-        write_statistics=True,
+        # Statistics only where a client can prune, the same list the
+        # full-resolution file uses. See gbcommon.PRUNABLE_STATS: the trailing
+        # metadata is a term in every first select, and these files are
+        # Hilbert-sorted, so nothing else prunes.
+        write_statistics=PRUNABLE_STATS,
         write_page_index=True,
         version="2.6",
     )
@@ -266,8 +319,49 @@ def verify(level: int, out) -> None:
     )
     for name, grp, pct in worst:
         print(f"    {pct:8.4f}%  {name} ({grp})")
+
+    # What a client actually pays for one feature: the trailing metadata once,
+    # then one row group's geometry chunk. hyparquet has no sub-chunk read, so
+    # the per-group figure is the per-feature figure and it is the number this
+    # file exists to lower.
+    footer, page_index = trailing_bytes(out)
+    groups = []
+    for g in range(disp.num_row_groups):
+        rg = disp.row_group(g)
+        idx = next(
+            i for i in range(rg.num_columns)
+            if rg.column(i).path_in_schema == "geometry"
+        )
+        groups.append(rg.column(idx).total_compressed_size)
+    groups.sort()
+    median_group = groups[len(groups) // 2]
+    p95 = groups[int(0.95 * len(groups))]
+    print(
+        f"  trailing metadata {footer + page_index:,} bytes "
+        f"(footer {footer:,} + page index {page_index:,})"
+    )
+    print(
+        f"  geometry per row group: median {median_group / 1024:,.0f} KiB, "
+        f"p95 {p95 / 1024:,.0f} KiB, max {groups[-1] / 1024:,.0f} KiB"
+    )
+    print(
+        f"  one feature costs {median_group / 1024:,.0f} KiB, a first select "
+        f"{(footer + page_index + median_group) / 1024:,.0f} KiB"
+    )
+
     if empty or misaligned:
         raise SystemExit("display geometry is empty, or rows are misaligned")
+    # Containment is the guarantee this file makes, so a breach fails the
+    # build rather than being printed and shipped. The outward buffer is what
+    # makes it hold; a feature under 99% means the simplification removed a
+    # vertex the buffer then failed to cover, and the tolerance divisor for
+    # that level has to come down.
+    if below99:
+        raise SystemExit(
+            f"{below99} feature(s) retain under 99% of their true area -- "
+            f"lower TOLERANCE_DIVISOR[{level}] (currently "
+            f"{TOLERANCE_DIVISOR[level]})"
+        )
 
 
 def main(argv: list[str]) -> int:

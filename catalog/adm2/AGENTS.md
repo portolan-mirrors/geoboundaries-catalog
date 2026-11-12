@@ -23,8 +23,9 @@ This is a **mirror**. [geoBoundaries](https://www.geoboundaries.org/) is the
 producer and the authoritative source.
 
 ```
-adm2/cgaz_adm2.parquet   101 MB, 49,349 rows, 97 row groups of 512 rows
-adm2/adm2.pmtiles        101 MB, zoom 0-9, layer "adm2"
+adm2/cgaz_adm2.parquet           104 MB, 49,349 rows, 193 row groups of 256
+adm2/cgaz_adm2_display.parquet   42 MB, same rows, same row groups
+adm2/adm2.pmtiles                101 MB, zoom 0-9, layer "adm2"
 ```
 
 How each polygon got here **[researched,
@@ -39,23 +40,55 @@ mapshaper-xl <ADM2.geojson> -simplify keep-shapes percentage=0.10 \
 Where no ADM2 file exists the script falls back to the country's ADM1 file, and
 failing that its ADM0 file. The per-country results are merged, cleaned with
 `-clean gap-fill-area=10000km2 keep-shapes`, and the 20 disputed-area polygons
-are merged in. Measured result: 13,183,670 vertices over 49,349 units, a mean
-of 267 **[derived]**. The exact simplification parameter for this release
+are merged in. Measured result on the published
+file: 12,980,126 vertices over 49,349 units, a mean of 263 and 187,879 at
+most; the upstream GeoPackage holds 13,183,670, and the difference is what
+`ST_MakeValid` drops from the geometry this catalog repairs **[derived]**. The exact simplification parameter for this release
 cannot be pinned to one script version; see the note in
 [`adm1/AGENTS.md`](../adm1/AGENTS.md).
 
 ## Layout and how to exploit it
 
-Rows are ordered along a Hilbert curve over the whole globe, in **97 row groups
-of 512 rows**, about 1.05 MB each, with a Parquet page index on every column.
+Rows are ordered along a Hilbert curve over the whole globe, in **193 row
+groups of 256 rows**, with a Parquet page index on every column.
 
 This is the number that matters most in this catalog. The mirror this one
 replaces put all 49,349 rows in a single row group, so a client that wanted one
-municipality's geometry had to read the entire geometry column chunk, roughly
-97 MB. Here the same fetch is one range request of about 1 MB, chosen from the
-measured 3.0 KB of compressed geometry per unit. `gpio check` warns that 512
-rows per group is "very low"; that guidance is written for scan-heavy
-analytics, and this file is built for single-feature lookups from a browser.
+municipality's geometry had to read the entire geometry column chunk, close to
+100 MB. `gpio check` warns that 256 rows per group is "very low"; that guidance
+is written for scan-heavy analytics, and this file is built for single-feature
+lookups from a browser.
+
+The size is not a bytes-per-group target. hyparquet, the reader a browser uses,
+has no sub-chunk read, so fetching one feature pulls that row group's whole
+geometry column chunk: one feature costs one row group whatever else is in it.
+But the thrift footer carries one record per column per row group, and a range
+client reads it before any data, so a smaller group means a larger footer.
+`tools/rowgroup_sweep.py` minimizes the sum, which is what a client's first
+select costs. Measured here: one feature is **519.7 KB** (a cold hyparquet read
+of one row group, all columns, median over 24 random rows), and a first select
+is **781.5 KB**, that plus the 261,810-byte thrift footer. The previous layout
+of 97 row groups of 512 rows cost 1.35 MB and 2,120 ms for one feature over the
+real network.
+
+Row group statistics are written only for `shapeID`, `shapeGroup` and the four
+`bbox` struct leaves. The Hilbert sort leaves every other column's min/max
+ranges overlapping across essentially every row group, so statistics on them
+prune nothing and only enlarge the footer; dropping them cut this file's
+trailing bytes from 670,381 to 346,581. The exact trailing sizes are published
+in [`names/index.json`](../names/index.json): `footer_bytes` 346,581 for the
+whole trailing span, `footer_metadata_bytes` 261,810 for the thrift footer
+alone, which is what a hyparquet client should pass as `initialFetchSize`.
+
+**There is a display file at this level.** `cgaz_adm2_display.parquet` is
+row-aligned with this file — same rows, same order, same row group boundaries —
+with simplified, outward-buffered geometry, 42 MB against 104 MB, and about
+191 KB for one unit's outline against 520 KB here. It arrived on 2026-11-12,
+reversing an earlier decision this catalog documented as "there is no ADM2
+display file": decoding one unit was never slow (the median unit is 82
+coordinates), but a client fetches the whole row group's geometry column chunk,
+and what fills a row group is the tail, not the median **[derived]**. Draw and
+pre-filter from the display file; clip, measure and export from this one.
 
 Prune on the `bbox` covering struct, which lets a reader skip row groups
 without decoding any WKB:

@@ -23,8 +23,9 @@ This is a **mirror**. [geoBoundaries](https://www.geoboundaries.org/) is the
 producer and the authoritative source.
 
 ```
-adm1/cgaz_adm1.parquet   76 MB, 3,224 rows, 51 row groups of 64 rows
-adm1/adm1.pmtiles        17 MB, zoom 0-7, layer "adm1"
+adm1/cgaz_adm1.parquet           81 MB, 3,224 rows, 202 row groups of 16 rows
+adm1/cgaz_adm1_display.parquet   13 MB, same rows, same row groups
+adm1/adm1.pmtiles                17 MB, zoom 0-7, layer "adm1"
 ```
 
 How each polygon got here **[researched,
@@ -48,17 +49,38 @@ script version: `gbCGAZBuild.py` and
 `geoBoundaryBuilder/archive/cgazBuild.py` both carry
 `-simplify keep-shapes percentage=0.10`, while the refactored
 `geoBoundaryBuilder/modules/cgaz_builder.py` has that line commented out. The
-10% figure is quoted from the two scripts that have it. Measured result:
-8,830,663 vertices over 3,224 units, a mean of 2,739 **[derived]**.
+10% figure is quoted from the two scripts that have it. Measured result on the
+published file: 8,644,779 vertices over 3,224 units, a mean of 2,681; the
+upstream GeoPackage holds 8,830,663, and the difference is what
+`ST_MakeValid` drops from the geometry this catalog repairs **[derived]**.
 
 ## Layout and how to exploit it
 
-Rows are ordered along a Hilbert curve over the whole globe, in **51 row groups
-of 64 rows**, about 1.49 MB each, with a Parquet page index on every column.
-The group size comes from measurement, not convention: this file holds about
-21.7 KB of compressed geometry per unit, so 64 rows is what lands a row group
-near 1.5 MB. A conventional 50,000-row group would put all 3,224 units in one
-group and make a single-province fetch a 76 MB read.
+Rows are ordered along a Hilbert curve over the whole globe, in **202 row
+groups of 16 rows**, with a Parquet page index on every column. A conventional
+50,000-row group would put all 3,224 units in one group and make a
+single-province fetch an 81 MB read.
+
+The group size comes from measurement, not convention, and the quantity
+measured is not bytes per group. hyparquet, the reader a browser uses, has no
+sub-chunk read, so fetching one feature pulls that row group's whole geometry
+column chunk: one feature costs one row group whatever else is in it. But the
+thrift footer carries one record per column per row group, and a range client
+reads it before any data, so a smaller group means a larger footer.
+`tools/rowgroup_sweep.py` minimizes the sum, which is what a client's first
+select costs. Measured here: one feature is **251.2 KB** (a cold hyparquet read
+of one row group, all columns, median over 24 random rows), and a first select
+is **519.2 KB**, that plus the 267,958-byte thrift footer. The previous layout
+of 51 row groups of 64 rows cost 674.5 KB and 1,103 ms for one feature over
+the real network.
+
+Row group statistics are written only for `shapeID`, `shapeGroup` and the four
+`bbox` struct leaves. The Hilbert sort leaves every other column's min/max
+ranges overlapping across essentially every row group, so they prune nothing
+and only enlarge the footer. The file's exact trailing sizes are published in
+[`names/index.json`](../names/index.json): `footer_bytes` 353,080 for the whole
+trailing span, `footer_metadata_bytes` 267,958 for the thrift footer alone,
+which is what a hyparquet client should pass as `initialFetchSize`.
 
 Prune with the `bbox` covering struct before touching geometry:
 

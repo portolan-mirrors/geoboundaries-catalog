@@ -16,8 +16,9 @@ list of exclusions.
 ### Data never enters git
 
 Never commit a GeoParquet, PMTiles, GeoPackage or Zarr file. The pipeline
-stages 1.1 GB in `../geoboundaries-staging`, outside the repository, and
-`tools/upload_data.py` carries it to the bucket. Git keeps every version of a
+works in `../geoboundaries-staging`, outside the repository: 4.1 GB in all,
+of which `publish/` is the 471 MB that `tools/upload_data.py` carries to the
+bucket and the rest is the upstream GeoPackages and the intermediate files. Git keeps every version of a
 binary forever and deleting it later reclaims nothing.
 
 ### Edit the generator, not the generated file
@@ -74,15 +75,42 @@ CI catches it.
 
 ### Row group sizes are deliberately small
 
-`gpio check` warns that 4, 64, 512 and 1,536 rows per group are "very low".
+`gpio check` warns that 1, 16, 256 and 1,536 rows per group are "very low".
 That guidance is written for scan-heavy analytics. This catalog is built for
-single-feature lookups from a browser, and each size comes from measured
-compressed bytes per row. See `docs/conformance.md`. Do not "fix" them.
+single-feature lookups from a browser, and each size comes from a measured
+sweep rather than from convention. hyparquet has no sub-chunk read, so one
+feature costs one whole row group; but the thrift footer and the page index
+both carry a record per column per row group, and a range client reads them
+before any data. `tools/rowgroup_sweep.py` minimizes the sum — trailing bytes
+plus one row group — which is what a client's first select costs. See
+`docs/conformance.md`. Do not "fix" them.
+
+In the boundary and display files, row group statistics are written only for
+the columns a client can prune on: `shapeID`, `shapeGroup` and the four `bbox`
+struct leaves. The list is `PRUNABLE_STATS` in `tools/gbcommon.py`, and the
+comment there explains why `bbox` has to be named by its leaf paths. Do not
+widen it, and do not apply it to the names index, which needs `name_norm`
+statistics for prefix pruning. The boundary files are
+Hilbert-sorted, so `shapeName`, `shapeType`, `country_units`, `area_km2`,
+`perimeter_km` and `compactness` have min/max ranges that overlap across
+essentially every row group and prune nothing, while a min and a max of
+`shapeName` is two strings per group per file.
 
 The `*_display.parquet` files deliberately repeat the full-resolution file's
 row group sizes rather than picking their own. Alignment is the feature: row
 *i* and row group *g* have to mean the same unit in both files, or a client
-cannot reuse one byte-range plan across them.
+cannot reuse one byte-range plan across them. All three boundary levels now
+carry one.
+
+### The Hilbert order needs its tiebreaker
+
+`tools/build_boundaries.py`'s `ORDER BY ST_Hilbert(...)` carries a
+`shapeGroup, shapeName, shapeID` tiebreaker and forces
+`preserve_insertion_order = true`. The Hilbert key alone is not a total order,
+so without a tiebreaker a rebuild can reorder rows arbitrarily — and a rebuild
+that reorders rows stales every display file and every `geometry_ref` in the
+names index at once. The sibling Overture catalog hit exactly this on 4,724
+locality rows. Do not remove either.
 
 ### The conformance allow-list
 

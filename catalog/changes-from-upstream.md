@@ -36,11 +36,12 @@ against the asset before assuming you have the release this catalog mirrors.
 | 3 | All-NULL `id` column dropped | removal | every row |
 | 4 | CRS assigned (upstream declares none) | fix | every row |
 | 5 | Measured columns added | addition | every row |
-| 6 | Hilbert row order and small row groups | restructure | every row |
+| 6 | Hilbert row order, and row groups sized for single-feature reads | restructure | every row |
 | 7 | GeoParquet 1.1 bbox covering column added | addition | every row |
 | 8 | Format: GeoPackage to GeoParquet and PMTiles | restructure | every row |
 | 9 | Name search index | new product | ours entirely |
-| 10 | Display geometry sidecars | new product | ours entirely, ADM0 and ADM1 |
+| 10 | Display geometry sidecars | new product | ours entirely, all three levels |
+| 11 | Row group statistics restricted to the prunable columns | restructure | every row group |
 
 Nothing is filtered out: every row and every attribute of the upstream release
 is present, including the 20 disputed areas, the backfilled coarser-level rows
@@ -278,35 +279,112 @@ on it are smaller than the units' published areas.
 
 **How to get vanilla.** Ignore the columns; nothing else depends on them.
 
-## 6. Hilbert row order and small row groups
+## 6. Hilbert row order, and row groups sized for single-feature reads
 
 **What.** Rows are reordered along a Hilbert space-filling curve over the whole
-globe, and each file is written with a row group size measured from its own
-compressed bytes per row.
+globe, and each file is cut into row groups sized by a measured sweep of what
+one feature costs a range client.
 
-| file | rows | row groups | rows per group | MB per group |
-|---|---|---|---|---|
-| adm0 | 218 | 55 | 4 | 1.76 |
-| adm1 | 3,224 | 51 | 64 | ~1.5 |
-| adm2 | 49,349 | 97 | 512 | ~1.05 |
-| names | 52,398 | 35 | 1,536 | 0.101 |
+| file | rows | row groups | rows per group | one feature | first select |
+|---|---|---|---|---|---|
+| adm0 | 218 | 218 | 1 | 209.5 KB | 481.2 KB |
+| adm1 | 3,224 | 202 | 16 | 251.2 KB | 519.2 KB |
+| adm2 | 49,349 | 193 | 256 | 519.7 KB | 781.5 KB |
+| names | 52,398 | 35 | 1,536 | 111.4 KB | 187.0 KB |
+
+"One feature" is a cold hyparquet read of one row group, all columns, median
+over 24 random rows. "First select" adds the thrift footer, which is what a
+client pays on its very first read of a file. At ADM0 that is one row group per
+country.
+
+**The sizes were retuned on 2026-11-12**: ADM0 went from 4 rows per group to
+1, ADM1 from 64 to 16, ADM2 from 512 to 256. Measured over the real network
+against the live catalog beforehand, one ADM2 feature cost 1.35 MB and
+2,120 ms, one ADM0 feature 1.23 MB and 2,326 ms, and one ADM1 feature 674.5 KB
+and 1,103 ms.
 
 **Why.** This is the reason the catalog exists. Another mirror of this data
 put all 49,349 ADM2 rows in a single row group, so a client that wanted one
-municipality's geometry had to read the entire geometry column chunk, about
-97 MB, to get one polygon. Small row groups plus the Hilbert order plus the
-bbox covering column turn that into one range request of about a megabyte.
+municipality's geometry had to read the entire geometry column chunk, close to
+100 MB, to get one polygon.
+
+The quantity being minimized is specific, and it is not bytes per row group.
+hyparquet, the reader a browser uses, has no sub-chunk read: fetching one
+feature pulls that row group's whole geometry column chunk, so one feature
+costs one row group whatever else is in it. Shrinking row groups is not free
+either, because the thrift footer carries one record per column per row group
+and the page index one entry per page per column per row group, both at the
+end of the file, and a range client reads them before any data. So what the
+sweep minimizes is *trailing bytes plus one row group*, which is exactly what
+a client's first select costs. The sweep is
+[`tools/rowgroup_sweep.py`](https://github.com/portolan-mirrors/geoboundaries-catalog/blob/main/tools/rowgroup_sweep.py); the chosen sizes are
+`ROW_GROUP_ROWS` in [`tools/gbcommon.py`](https://github.com/portolan-mirrors/geoboundaries-catalog/blob/main/tools/gbcommon.py), with the
+reasoning in the comment beside them.
+
+**The full files grew**, by 7.9% at ADM0, 7.5% at ADM1 and 3.8% at ADM2,
+because smaller row groups compress worse. That is the deliberate price of the
+layout: these files exist to be range-read one feature at a time from a
+browser, and the whole-file download is the secondary use, which the upstream
+GeoPackage serves better anyway.
+
+| file | before | after |
+|---|---|---|
+| adm0/cgaz_adm0.parquet | 96,593,435 B | 104,201,824 B |
+| adm1/cgaz_adm1.parquet | 74,997,064 B | 80,585,156 B |
+| adm2/cgaz_adm2.parquet | 100,448,329 B | 104,282,056 B |
+| names/cgaz_names.parquet | 3,895,531 B | 3,901,414 B |
 
 `gpio check` warns that these row group sizes are "very low". That guidance is
 written for scan-heavy analytics, where a large row group amortizes per-group
 overhead across a full-table read. The tradeoff is accepted and recorded in
 [docs/conformance.md](https://github.com/portolan-mirrors/geoboundaries-catalog/blob/main/docs/conformance.md).
 
+**The trailing metadata is published, so a client never has to guess.** Every
+file entry in [`catalog/names/index.json`](./names/index.json) carries
+two exact sizes. `footer_bytes` is the whole trailing span, thrift footer plus
+page index, so one range request of exactly that many bytes from the end of a
+file leaves a client holding all of the file's metadata.
+`footer_metadata_bytes` is the thrift footer alone, the minimum a reader needs
+to locate row groups, and it is what a hyparquet client should pass as
+`initialFetchSize`, because hyparquet never reads the page index bodies.
+
+| file | `footer_bytes` | `footer_metadata_bytes` |
+|---|---|---|
+| names/cgaz_names.parquet | 107,089 | 75,606 |
+| adm0 full | 348,440 | 271,716 |
+| adm0 display | 251,358 | 189,008 |
+| adm1 full | 353,080 | 267,958 |
+| adm1 display | 279,870 | 205,330 |
+| adm2 full | 346,581 | 261,810 |
+| adm2 display | 274,277 | 200,258 |
+
+Without these a client pays hyparquet's speculative 512 KiB (524,288-byte)
+tail on the first read of every file, and on any file whose footer exceeds
+512 KiB it pays a second round trip as well.
+
 **Row order is not meaningful data.** The upstream file order carries no
 information: it is the order countries were processed in. Nothing upstream
 references a row index.
 
-**How to get vanilla.** Sort by whatever you need; the rows are the same rows.
+**The Hilbert order needs a tiebreaker to be reproducible.**
+`tools/build_boundaries.py`'s `ORDER BY ST_Hilbert(...)` carries a
+`shapeGroup, shapeName, shapeID` tiebreaker and forces
+`preserve_insertion_order = true`. The Hilbert key alone is not a total order,
+so without a tiebreaker a rebuild could reorder rows arbitrarily — and a
+rebuild that reorders rows stales every display file and every `geometry_ref`
+in the names index at once. The sibling Overture catalog hit exactly this on
+4,724 locality rows.
+
+**How to reproduce.**
+
+```bash
+python3 tools/rowgroup_sweep.py     # the row group size sweep
+python3 tools/build_boundaries.py   # write the files at the chosen sizes
+```
+
+**How to get vanilla.** There is no vanilla row group layout to return to: a
+GeoPackage is a SQLite database and has no row groups at all. Sort by whatever
+you need; the rows are the same rows.
 
 ## 7. bbox covering column added
 
@@ -367,32 +445,66 @@ from the GeoPackages, or ignore the collection.
 
 ## 10. Display geometry sidecars — entirely our product
 
-**What.** The ADM0 and ADM1 collections carry a second GeoParquet file,
+**What.** All three boundary collections carry a second GeoParquet file,
 `cgaz_adm{N}_display.parquet`, holding the same rows in the same order with
 simplified, outward-buffered geometry and the identity columns.
 
 | | full resolution | display | ratio | max coordinates per feature |
 |---|---|---|---|---|
-| ADM0 | 96,593,435 B | 7,374,831 B | 13.1x | 528,021 → 68,973 |
-| ADM1 | 74,997,064 B | 13,273,152 B | 5.7x | 572,801 → 54,043 |
+| ADM0 | 104,201,824 B | 7,521,581 B | 13.9x | 528,021 → 68,973 |
+| ADM1 | 80,585,156 B | 13,179,712 B | 6.1x | 572,801 → 54,043 |
+| ADM2 | 104,282,056 B | 42,419,433 B | 2.5x | 187,879 → 36,029 |
 
-Spot checks: the United Kingdom goes from 61,752 coordinates to 6,815, Norway
-from 131,567 to 16,434, Canada from 528,021 to 68,973, and all three stay
-recognisable with their island groups intact.
-
-**ADM2 has no display file**, and that is a measurement rather than an
-omission. CGAZ already simplifies ADM2 upstream: the median unit is 82
-coordinates, the 90th percentile 560, the 99th 2,837, and only 14 rows of
-49,349 exceed 20,000. Decoding one unit from the full-resolution file is
-already sub-millisecond work. A tolerance coarse enough to shrink a 100 MB
-file meaningfully would also put a buffer of a kilometre or more around units
-that are only a few kilometres across — a poor trade at a level where nothing
-was slow.
+Spot checks at ADM0: the United Kingdom goes from 61,752 coordinates to 6,815,
+Norway from 131,567 to 16,434, Canada from 528,021 to 68,973, and all three
+stay recognisable with their island groups intact.
 
 **Why.** CGAZ ADM0 is not simplified upstream — the vertex reduction in the
 geoBoundaries build applies to ADM1 and ADM2 only — so one country outline can
 be hundreds of thousands of coordinates. A browser that decodes the United
 Kingdom from the full-resolution file to draw a highlight stops responding.
+
+### ADM2 gained its display file on 2026-11-12
+
+This reverses an earlier decision, recorded here and elsewhere in this catalog
+as "ADM2 has no display file". The old reasoning was right about the wrong
+quantity. ADM2 geometry *is* already simplified upstream — the median unit is
+82 coordinates, the 90th percentile 560, the 99th 2,837, and only 14 rows of
+49,349 exceed 20,000 — so *decoding* one unit was never slow.
+
+But a client does not decode one unit from an isolated byte range. hyparquet
+has no sub-chunk read, so fetching one ADM2 feature pulls that row group's
+entire geometry column chunk, and measured against the live catalog that was a
+median of 1.35 MB and 2.1 seconds, worst case 3.5 MB and 4.3 seconds. The cost
+was bytes per row group, and it is the **tail** that fills a row group — the
+99th percentile and those 14 huge rows — not the median 82.
+
+**The divisor is 18 at ADM2, against 25 at ADM0 and ADM1.** 25 is about 4% of
+a unit's width; 18 is about 5.6%. The extra came from the byte budget: a
+256-row group has to land near 150 KB, and divisor 25 left the median group at
+165 KiB. The sweep over all 49,349 features:
+
+| divisor | file | median row group | worst containment | features under 99% |
+|---|---|---|---|---|
+| 25 | 44.92 MB | 165 KiB | 99.332% | 0 |
+| 20 | 43.11 MB | 156 KiB | 99.042% | 0 |
+| **18** | **42.42 MB** | **151 KiB** | **99.146%** | **0** |
+| 16 | 41.79 MB | 147 KiB | 98.883% | 1 |
+| 15 | 41.50 MB | 146 KiB | 99.050% | 0 |
+
+**Containment is not monotonic in the divisor** — 16 fails where 15 does not —
+because a coarser simplification can remove the very vertex whose corner the
+buffer then fails to cover. That is why 18 was chosen rather than riding the
+aggressive end of a non-monotonic curve.
+
+`ST_ReducePrecision` was tried as a cheaper lever and rejected: it raises
+`TopologyException: side location conflict` on the ADM2 geometry at both 1e-4
+and 3e-4.
+
+Result: 12,980,126 coordinates reduced to 2,854,112, a factor of 4.5, with a
+maximum of 36,029 per feature, 0 empty geometries and 0 invalid ones. Geometry
+per row group is a median of 151 KiB, a 95th percentile of 430 KiB and a
+maximum of 1,173 KiB.
 
 **The three properties that make it a drop-in parallel read.** Identical row
 count, identical row order and identical row group boundaries, so row *i* and
@@ -404,7 +516,8 @@ way. Its own bbox covering column, so it prunes on its own.
 
 ```sql
 ST_Buffer(ST_SimplifyPreserveTopology(geometry, tol), tol, 2)
--- tol = greatest(1e-6, least(0.01, sqrt(ST_Area(geometry)) / 25))
+-- tol = greatest(1e-6, least(0.01, sqrt(ST_Area(geometry)) / divisor))
+-- divisor = 25 at ADM0 and ADM1, 18 at ADM2
 ```
 
 Simplification alone cuts corners inward, and a shape used as a spatial filter
@@ -419,17 +532,36 @@ almost everything against Sliema, a Maltese local council of 1.3 km². Measured
 with a flat tolerance, Sliema lost 8% of its area and Baiti in Nauru 9%.
 Scaling the tolerance by `sqrt(area)/25` keeps the displacement under about 4%
 of a unit's width whatever its size, and leaves large units on the flat 0.01.
+At ADM2 the divisor is 18, which is about 5.6%, for the reason given above.
 
 **Verified** against the full-resolution file, row by row through a
 `POSITIONAL JOIN`:
 
-| | ADM0 | ADM1 |
-|---|---|---|
-| rows, row groups aligned | 218 in 55 | 3,224 in 51 |
-| empty geometries introduced | 0 | 0 |
-| invalid geometries introduced | 0 | 0 |
-| worst area of the original retained | 99.9535% (Kiribati) | 99.8714% (Gilbert Islands, KIR) |
-| features retaining under 99% | 0 | 0 |
+| | ADM0 | ADM1 | ADM2 |
+|---|---|---|---|
+| rows, row groups aligned | 218 in 218 | 3,224 in 202 | 49,349 in 193 |
+| coordinates | 501,232 | 893,321 | 2,854,112 |
+| max coordinates per feature | 68,973 | 54,043 | 36,029 |
+| empty geometries introduced | 0 | 0 | 0 |
+| invalid geometries introduced | 0 | 0 | 0 |
+| worst area of the original retained | 99.9535% (Kiribati) | 99.8714% (Gilbert Islands, KIR) | 99.1461% (Contla de Juan Cuamatzi, MEX) |
+| features retaining under 99% | 0 | 0 | 0 |
+| geometry per row group, median / p95 / max | 10 / 131 / 1,001 KiB | 37 / 134 / 1,107 KiB | 151 / 430 / 1,173 KiB |
+
+The five worst-contained features at each level, which is where to look if a
+filter built from a display shape behaves oddly:
+
+| level | the five worst |
+|---|---|
+| ADM0 | Kiribati 99.9535%, St Vincent & the Grenadines 99.9605%, Tonga 99.9750%, Marshall Is 99.9780%, Maldives 99.9853% |
+| ADM1 | Gilbert Islands (KIR) 99.8714%, Moore's Island (BHS) 99.9141%, Haa Dhaalu (MDV) 99.9246%, Kardzhali (BGR) 99.9329%, Cabinda (AGO) 99.9484% |
+| ADM2 | Contla de Juan Cuamatzi (MEX) 99.1461%, João Monlevade (BRA) 99.1694%, Esan West (NGA) 99.2584%, Općina Borovo (HRV) 99.2588%, IZVOARELE SUCEVEI (ROU) 99.2608% |
+
+**Row alignment is verified, not assumed.**
+[`tools/build_display.py`](https://github.com/portolan-mirrors/geoboundaries-catalog/blob/main/tools/build_display.py) checks it per level as it
+builds, and `tests/test_index_refs.py` samples all three levels: 2,000
+`geometry_ref` pointers — 8 at level 0, 121 at level 1 and 1,871 at level 2 —
+all resolving to the right unit in both the full and the display file.
 
 Buffering with 8 quadrant segments, the GEOS default, rounds every corner and
 puts back more coordinates than simplification removed. 2 segments keeps a
@@ -481,6 +613,42 @@ only understands `data` gets the real geometry.
 
 **How to get vanilla.** Ignore the `display` assets and read the `data` asset,
 which is the full-resolution geometry.
+
+## 11. Row group statistics restricted to the prunable columns
+
+**What.** Every boundary and display file carries row group statistics for
+`shapeID`, `shapeGroup` and the four `bbox` struct leaves — `bbox.xmin`,
+`bbox.ymin`, `bbox.xmax`, `bbox.ymax` — and for nothing else. Statistics on
+`shapeName`, `shapeType`, `country_units`, `area_km2`, `perimeter_km`,
+`compactness` and `geometry` are not written.
+
+**Why.** These files are Hilbert-sorted, so those columns' min/max ranges
+overlap across essentially every row group and prune nothing, while a min and a
+max of `shapeName` is two strings per row group per file. With 193 to 218 row
+groups per file, that is metadata a range client downloads before any data and
+can never use. Measured on ADM2 at 256 rows per group, the restriction cut the
+trailing bytes from 670,381 to 346,581 — 324 KB off every client's first
+select.
+
+The `bbox` entries have to name the struct's **leaf** paths. PyArrow matches
+`write_statistics` against the leaf path, not the top-level column, so listing
+`"bbox"` silently drops statistics from all four leaves, and those four are the
+GeoParquet 1.1 covering — the only spatial pruning these files offer.
+
+**What a consumer loses.** A query predicate on `shapeName`, `shapeType` or any
+measured column reads every row group's pages rather than skipping groups on
+statistics. Predicates on `shapeID`, `shapeGroup` and the bbox still prune, and
+those are the three a single-feature lookup uses. The Parquet page index is
+still written on every column.
+
+**How to reproduce.** `PRUNABLE_STATS` in
+[`tools/gbcommon.py`](https://github.com/portolan-mirrors/geoboundaries-catalog/blob/main/tools/gbcommon.py), applied by
+[`tools/build_boundaries.py`](https://github.com/portolan-mirrors/geoboundaries-catalog/blob/main/tools/build_boundaries.py) and
+[`tools/build_display.py`](https://github.com/portolan-mirrors/geoboundaries-catalog/blob/main/tools/build_display.py).
+
+**How to get vanilla.** There is nothing to return to: a GeoPackage carries no
+Parquet metadata at all. Rewrite the file with PyArrow and no
+`write_statistics` restriction if you want statistics on every column.
 
 ---
 

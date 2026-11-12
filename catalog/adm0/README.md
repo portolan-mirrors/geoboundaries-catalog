@@ -10,10 +10,10 @@ producer and the authoritative source.
 | | |
 |---|---|
 | Rows | 218 (198 `ADM0`, 20 `DISP`) |
-| GeoParquet | 97 MB, 55 row groups of 4 rows, zstd, bbox covering |
+| GeoParquet | 104 MB, 218 row groups of 1 row, zstd, bbox covering |
 | PMTiles | 7.1 MB, zoom 0-6 |
 | CRS | CRS84 (EPSG:4326), as published |
-| Vertices | 10,101,960, a mean of 46,339 per country |
+| Vertices | 9,807,040 as published, a mean of 44,986 per country (The upstream GeoPackage holds 10,101,960; this catalog publishes fewer because `ST_MakeValid` drops degenerate vertices from the geometry it repairs) |
 
 ## What these boundaries are, and are not
 
@@ -35,8 +35,8 @@ sovereign states.
 
 Unlike the ADM1 and ADM2 levels, **this level is not simplified** — the vertex
 reduction in the upstream build applies to the lower levels only. That is why
-218 country polygons weigh more than 49,349 municipalities. Use the PMTiles
-archive to draw outlines; the GeoParquet is for analysis.
+218 country polygons weigh as much as all 49,349 municipalities. Use the
+PMTiles archive to draw outlines; the GeoParquet is for analysis.
 
 > **Not a byte-for-byte mirror.** This catalog repairs faults in the upstream
 > release and adds products geoBoundaries does not publish. Every deviation,
@@ -48,12 +48,15 @@ archive to draw outlines; the GeoParquet is for analysis.
 `cgaz_adm0_display.parquet` holds **the same rows in the same order with the
 same row group boundaries** as the data file, with geometry simplified and
 then buffered outward by the same distance. Row *i* and row group *g* mean the
-same unit in both, so one byte-range plan serves either.
+same unit in both, so one byte-range plan serves either. It is 7.5 MB against
+the data file's 104 MB, and one country's outline costs about 11 KB there
+against 210 KB in the data file.
 
 Use it to draw an outline, and to pre-filter another dataset to this unit. The
 outward bias is deliberate: a filter shape that sits inside the true boundary
 silently drops features along the edge, and over-fetching is cheap. Every
-feature retains at least 99.95% of its original area.
+feature retains at least 99.95% of its original area, the worst case being
+Kiribati at 99.9535%.
 
 Do **not** measure area from it, do not use it to decide which side of a
 border a point falls on, and do not publish it as a boundary: neighbouring

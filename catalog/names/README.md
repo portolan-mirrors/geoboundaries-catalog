@@ -1,8 +1,8 @@
 # CGAZ Name Search Index
 
-A search sidecar for the three boundary collections in this catalog: one row
-per named administrative unit across all three CGAZ levels, 52,398 rows in
-3.9 MB, sorted by a folded form of the name.
+A cloud-native gazetteer over the three boundary collections in this catalog:
+one row per named administrative unit across all three CGAZ levels, 52,398 rows
+in 3.9 MB, sorted by a folded form of the name.
 
 It exists so that a **static client with no server** can turn a typed name into
 a `shapeID`, an extent and a point — the lookup half of a browser geocoder.
@@ -16,7 +16,8 @@ authoritative source.
 | Rows | 52,398 (218 at level 0, 3,202 at level 1, 48,978 at level 2) |
 | GeoParquet | 3.9 MB, 35 row groups of 1,536 rows, zstd, page index |
 | Row group | ~109 KiB |
-| Footer + page index | ~107,000 bytes |
+| Footer + page index | 107,089 bytes exactly |
+| Thrift footer alone | 75,606 bytes exactly |
 | PMTiles | 12 MB, zoom 0-8 |
 | CRS | CRS84 (EPSG:4326) |
 
@@ -37,9 +38,11 @@ which is required because every column chunk is zstd.
 `name_norm` are tight, non-overlapping alphabetical ranges. Measured over all
 676 two-letter prefixes, a prefix touches a minimum of one, a median of one and
 a maximum of three row groups — so a prefix lookup is one or two reads of
-~109 KiB without downloading the file. The footer plus page index is ~107,000
-bytes, inside hyparquet's 512 KiB default prefetch, so one request plans the
-rest.
+~109 KiB without downloading the file. One range request of the file's last
+107,089 bytes leaves a client holding all of its metadata, and
+[`index.json`](index.json) publishes that number, along with the 75,606 bytes
+of thrift footer a hyparquet client needs on its own; pass one of them as
+`initialFetchSize` rather than letting hyparquet speculate a 512 KiB tail.
 
 Both paths, with runnable code and the join back to geometry, are in
 [AGENTS.md](AGENTS.md).

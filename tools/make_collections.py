@@ -23,10 +23,13 @@ import pyarrow.parquet as pq
 
 from gbcommon import (
     EXTRACTION_DATE,
+    NAMES_ROW_GROUP_ROWS,
     PUBLISH,
+    ROW_GROUP_ROWS,
     SOURCE_COMMIT_DATE,
     source_path,
     source_url,
+    trailing_bytes,
 )
 
 REPO = Path(__file__).resolve().parents[1]
@@ -186,7 +189,7 @@ def country_units(level: int) -> dict:
 
 def boundary_spec(level: int, *, title: str, short: str, description: str,
                   keywords: list[str], composition: str,
-                  extra_columns: list[dict], row_group_rows: int,
+                  extra_columns: list[dict],
                   max_zoom: int, style_titles: dict[str, str]) -> dict:
     columns = [SHAPE_NAME]
     if level > 0:
@@ -205,12 +208,13 @@ def boundary_spec(level: int, *, title: str, short: str, description: str,
         "pmtiles": f"adm{level}.pmtiles",
         "pmtiles_layer": f"adm{level}",
         "max_zoom": max_zoom,
-        "row_group_rows": row_group_rows,
+        # Not a parameter: the row group size a client has to know is the one
+        # the file was actually written with, and gbcommon.ROW_GROUP_ROWS is
+        # what wrote it. Typing it twice is how a retune ships a manifest that
+        # points a client at the wrong row group.
+        "row_group_rows": ROW_GROUP_ROWS[level],
         "columns": columns,
-        "source_gpkg": source_url(level),
-        "source_gpkg_title": (
-            f"geoBoundariesCGAZ_ADM{level}.gpkg, the upstream GeoPackage"
-        ),
+        "source_levels": [level],
         "styles": style_titles,
         "geometry_types": ["Polygon", "MultiPolygon"],
     }
@@ -224,9 +228,14 @@ SPECS: list[dict] = [
         description=(
             "The 218 country-level polygons of the geoBoundaries CGAZ "
             "composite, as GeoParquet 1.1 with bbox covering metadata and "
-            "spatially sorted into 55 row groups of 4 rows, so a client can "
-            "pull one country's geometry in a single range request instead of "
-            "downloading 97 MB. 198 rows are recognized countries and 20 are "
+            "spatially sorted into 218 row groups of 1 row -- one country per "
+            "row group -- so a client pulls one country's geometry in a "
+            "single range request of about 250 KB instead of downloading 104 "
+            "MB. A second GeoParquet file, `cgaz_adm0_display.parquet`, "
+            "carries the same 218 rows in the same order and the same row "
+            "groups with geometry simplified and buffered outward, 7.5 MB "
+            "against 104, which brings one country's outline down to about 10 "
+            "KB. 198 rows are recognized countries and 20 are "
             "disputed areas carried as polygons of their own. The outlines "
             "come from the US Department of State Large Scale International "
             "Boundaries file, dissolved to one polygon per ISO code, and "
@@ -263,7 +272,6 @@ SPECS: list[dict] = [
                 ),
             },
         ],
-        row_group_rows=4,
         max_zoom=6,
         style_titles={
             "default": "Country area",
@@ -280,7 +288,9 @@ SPECS: list[dict] = [
             "3,224 first-level administrative units worldwide (states, "
             "provinces, regions, governorates) from the geoBoundaries CGAZ "
             "composite, as GeoParquet 1.1 with bbox covering metadata and "
-            "spatially sorted into 51 row groups of 64 rows. 3,202 rows are "
+            "spatially sorted into 202 row groups of 16 rows, so one unit's "
+            "geometry costs about 220 KB to fetch rather than the whole 81 MB "
+            "file. 3,202 rows are "
             "genuine first-level units; 20 are disputed areas and 2 are "
             "countries with no first-level breakdown, Antarctica and Vatican "
             "City, carried up so the composite stays seamless. Geometry is "
@@ -291,8 +301,10 @@ SPECS: list[dict] = [
             "unit, and the composite publishes no key linking a unit to its "
             "parent country's subdivisions. A second GeoParquet file, "
             "`cgaz_adm1_display.parquet`, carries the same rows in the same "
-            "order with geometry simplified and buffered outward, 13 MB "
-            "against 75, for drawing and for spatial filtering."
+            "order and the same row groups with geometry simplified and "
+            "buffered outward, 13 MB against 81, which brings one unit's "
+            "outline down to about 37 KB, for drawing and for spatial "
+            "filtering."
         ),
         keywords=[
             "administrative boundaries", "states", "provinces", "regions",
@@ -301,7 +313,6 @@ SPECS: list[dict] = [
         ],
         composition="3,202 ADM1, 20 DISP and 2 ADM0",
         extra_columns=[country_units(1)],
-        row_group_rows=64,
         max_zoom=7,
         style_titles={
             "default": "First-level unit area",
@@ -318,9 +329,14 @@ SPECS: list[dict] = [
             "49,349 second-level administrative units worldwide (counties, "
             "districts, municipalities, communes) from the geoBoundaries CGAZ "
             "composite, as GeoParquet 1.1 with bbox covering metadata and "
-            "spatially sorted into 97 row groups of 512 rows, so one unit's "
-            "geometry costs about 1 MB to fetch rather than the whole 101 MB "
-            "file. 49,015 rows are genuine second-level units; 312 are "
+            "spatially sorted into 193 row groups of 256 rows, so one unit's "
+            "geometry costs about 325 KB to fetch rather than the whole 104 "
+            "MB file. A second GeoParquet file, "
+            "`cgaz_adm2_display.parquet`, carries the same rows in the same "
+            "order and the same row groups with geometry simplified and "
+            "buffered outward, 42 MB against 104, which halves that again to "
+            "about 151 KB for one unit's outline. 49,015 rows are genuine "
+            "second-level units; 312 are "
             "first-level units standing in for 22 countries that have no "
             "second-level data, 20 are disputed areas and 2 are countries. "
             "Brazil alone contributes 5,570 rows. Read the "
@@ -334,7 +350,6 @@ SPECS: list[dict] = [
         ],
         composition="49,015 ADM2, 312 ADM1, 20 DISP and 2 ADM0",
         extra_columns=[country_units(2)],
-        row_group_rows=512,
         max_zoom=9,
         style_titles={
             "default": "Second-level unit area",
@@ -372,9 +387,12 @@ SPECS: list[dict] = [
         "pmtiles": "names.pmtiles",
         "pmtiles_layer": "names",
         "max_zoom": 8,
-        "row_group_rows": 1536,
+        "row_group_rows": NAMES_ROW_GROUP_ROWS,
         "geometry_types": ["Point"],
-        "source_gpkg": None,
+        # The index is built from all three levels, so it links all three
+        # upstream GeoPackages. It previously linked none, which made it the
+        # one collection in the catalog with no path back to the source.
+        "source_levels": [0, 1, 2],
         "styles": {
             "default": "Indexed names by administrative level",
             "ambiguity": "How many units share this name",
@@ -651,16 +669,28 @@ def build(spec: dict) -> dict:
             "file:size": style_path.stat().st_size,
             "file:checksum": checksum(style_path),
         }
-    if spec["source_gpkg"]:
+    # Direct links to the upstream data, on every collection without
+    # exception. A mirror that only offers its own reprocessed files asks a
+    # consumer to take its word for them; a mirror that links the source lets
+    # anyone check, and lets anyone who wants the authoritative bytes for bulk
+    # or analytical work skip this catalog entirely. See the README's "The
+    # upstream data vs our optimized files".
+    #
+    # The names collection is derived from all three levels, so it carries all
+    # three GeoPackages rather than none, which is what it had.
+    for level in spec["source_levels"]:
         # file:size and file:checksum come from the downloaded copy in the
         # staging tree, so they pin the exact upstream bytes this collection
         # was built from. CGAZ is served from a moving branch, so without
         # them "the file at that URL" is not a version.
-        local = source_path(int(spec["id"][-1]))
-        assets["source-gpkg"] = {
-            "href": spec["source_gpkg"],
+        local = source_path(level)
+        key = "source-gpkg" if len(spec["source_levels"]) == 1 else f"source-gpkg-adm{level}"
+        assets[key] = {
+            "href": source_url(level),
             "type": "application/geopackage+sqlite3",
-            "title": spec["source_gpkg_title"],
+            "title": (
+                f"geoBoundariesCGAZ_ADM{level}.gpkg, the upstream GeoPackage"
+            ),
             "roles": ["data", "source"],
             "file:size": local.stat().st_size,
             "file:checksum": checksum(local),
