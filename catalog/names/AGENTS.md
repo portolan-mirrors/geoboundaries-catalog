@@ -18,7 +18,7 @@ Each factual claim is tagged with how it was established:
 **A search sidecar, not a boundary dataset.** One row per named administrative
 unit across all three CGAZ levels, built so that a static client with no server
 can turn a typed name into a `shapeID`, a bbox and a point. Public root:
-`https://data.source.coop/portolan-mirrors/geoboundaries/catalog.json`
+`https://data.source.coop/portolan-mirrors/geoboundaries-catalog/catalog.json`
 
 ```
 names/cgaz_names.parquet   3.6 MB, 52,398 rows, 35 row groups of 1,536 rows
@@ -179,7 +179,7 @@ statistics itself:
 
 ```sql
 SELECT name, country_name, level, name_dupes, round(area_km2) AS area_km2
-FROM 'https://data.source.coop/portolan-mirrors/geoboundaries/names/cgaz_names.parquet'
+FROM 'https://data.source.coop/portolan-mirrors/geoboundaries-catalog/names/cgaz_names.parquet'
 WHERE name_norm LIKE 'zurich%'
 ORDER BY level, area_km2 DESC;
 ```
@@ -221,7 +221,7 @@ when that round trip succeeds, changes the string, and the string holds one of
 the mojibake lead sequences. All 38 were checked by hand — 16 Chilean regions,
 7 Portuguese districts, 10 New Zealand names with macrons, 4 Peruvian
 provinces, 2 Seychelles districts — with no false positive. The rule is in
-[`tools/build_names.py`](https://github.com/portolan-mirrors/geoboundaries/blob/main/tools/build_names.py).
+[`tools/build_names.py`](https://github.com/portolan-mirrors/geoboundaries-catalog/blob/main/tools/build_names.py).
 
 **The repair touches `name_norm` only.** `name` stays byte-for-byte as
 published, because this is a mirror. So for those 38 rows the searchable form

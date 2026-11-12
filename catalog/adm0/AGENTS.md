@@ -16,7 +16,7 @@ Each factual claim is tagged with how it was established:
 ## What this collection holds
 
 218 country-level polygons from the geoBoundaries CGAZ composite. Public root:
-`https://data.source.coop/portolan-mirrors/geoboundaries/catalog.json`
+`https://data.source.coop/portolan-mirrors/geoboundaries-catalog/catalog.json`
 
 This is a **mirror**. [geoBoundaries](https://www.geoboundaries.org/) is the
 producer and the authoritative source.
@@ -72,7 +72,7 @@ pruned:
 -- Which country covers 2.35 E, 48.85 N? Reads the bbox column, then one
 -- row group's geometry.
 SELECT shapeName, shapeGroup
-FROM 'https://data.source.coop/portolan-mirrors/geoboundaries/adm0/cgaz_adm0.parquet'
+FROM 'https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm0/cgaz_adm0.parquet'
 WHERE bbox.xmin <= 2.35 AND bbox.xmax >= 2.35
   AND bbox.ymin <= 48.85 AND bbox.ymax >= 48.85
   AND ST_Contains(geometry, ST_Point(2.35, 48.85));

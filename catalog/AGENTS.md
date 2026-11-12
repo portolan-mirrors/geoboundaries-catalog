@@ -16,7 +16,7 @@ Each factual claim is tagged with how it was established:
 ## What this catalog holds
 
 Public root:
-`https://data.source.coop/portolan-mirrors/geoboundaries/catalog.json`
+`https://data.source.coop/portolan-mirrors/geoboundaries-catalog/catalog.json`
 
 | collection | rows | holds |
 |---|---|---|
@@ -95,7 +95,7 @@ Everything is readable in place over HTTPS, with no credentials.
 INSTALL spatial; LOAD spatial; INSTALL httpfs; LOAD httpfs;
 
 SELECT shapeType, count(*) AS n
-FROM 'https://data.source.coop/portolan-mirrors/geoboundaries/adm2/cgaz_adm2.parquet'
+FROM 'https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm2/cgaz_adm2.parquet'
 GROUP BY 1 ORDER BY 2 DESC;
 ```
 ```
@@ -113,7 +113,7 @@ is 7 MB.
 ## How this catalog was built
 
 Five scripts in the
-[source repository](https://github.com/portolan-mirrors/geoboundaries/tree/main/tools),
+[source repository](https://github.com/portolan-mirrors/geoboundaries-catalog/tree/main/tools),
 each runnable on its own, with no step hidden in a notebook:
 
 ```bash

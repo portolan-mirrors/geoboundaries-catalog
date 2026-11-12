@@ -112,7 +112,7 @@ the page that uses the boundaries.
 ## Provenance
 
 Built by
-[tools/build_names.py](https://github.com/portolan-mirrors/geoboundaries/blob/main/tools/build_names.py)
+[tools/build_names.py](https://github.com/portolan-mirrors/geoboundaries-catalog/blob/main/tools/build_names.py)
 from the three boundary collections in this catalog, not from the upstream
 GeoPackages, so the index and the geometry it points at cannot disagree.
 Upstream release: commit
@@ -120,7 +120,7 @@ Upstream release: commit
 of 2024-04-20, extracted 2026-11-12. The normalization rule, the mojibake
 repair rule and the row selection rule are in that script and in
 `.portolan/metadata.yaml` in the
-[repository](https://github.com/portolan-mirrors/geoboundaries).
+[repository](https://github.com/portolan-mirrors/geoboundaries-catalog).
 
 ## Access
 
@@ -128,7 +128,7 @@ repair rule and the row selection rule are in that script and in
 INSTALL httpfs; LOAD httpfs;
 
 SELECT name, country_name, level, name_dupes, round(area_km2) AS area_km2
-FROM 'https://data.source.coop/portolan-mirrors/geoboundaries/names/cgaz_names.parquet'
+FROM 'https://data.source.coop/portolan-mirrors/geoboundaries-catalog/names/cgaz_names.parquet'
 WHERE name_norm LIKE 'zurich%'
 ORDER BY level, area_km2 DESC;
 ```

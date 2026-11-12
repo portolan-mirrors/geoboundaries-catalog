@@ -95,7 +95,7 @@ build assigns EPSG:4326. One column is dropped, an `id` column that is NULL in
 all 3,224 rows. Everything added is measured: geodesic area and perimeter, a
 compactness ratio, a per-country unit count, and a bbox covering struct. The
 complete transform list is in `.portolan/metadata.yaml` in the
-[repository](https://github.com/portolan-mirrors/geoboundaries).
+[repository](https://github.com/portolan-mirrors/geoboundaries-catalog).
 
 ## Access
 
@@ -103,7 +103,7 @@ complete transform list is in `.portolan/metadata.yaml` in the
 INSTALL httpfs; LOAD httpfs;
 
 SELECT shapeName, shapeGroup, round(area_km2) AS area_km2, country_units
-FROM 'https://data.source.coop/portolan-mirrors/geoboundaries/adm1/cgaz_adm1.parquet'
+FROM 'https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm1/cgaz_adm1.parquet'
 WHERE shapeType = 'ADM1' AND shapeGroup = 'KEN'
 ORDER BY area_km2 DESC LIMIT 10;
 ```

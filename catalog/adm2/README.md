@@ -106,7 +106,7 @@ build assigns EPSG:4326. One column is dropped, an `id` column that is NULL in
 all 49,349 rows. Everything added is measured: geodesic area and perimeter, a
 compactness ratio, a per-country unit count, and a bbox covering struct. The
 complete transform list is in `.portolan/metadata.yaml` in the
-[repository](https://github.com/portolan-mirrors/geoboundaries).
+[repository](https://github.com/portolan-mirrors/geoboundaries-catalog).
 
 ## Access
 
@@ -115,7 +115,7 @@ INSTALL httpfs; LOAD httpfs;
 
 -- The smallest units around central Nairobi, pruned on the bbox column
 SELECT shapeName, shapeGroup, round(area_km2, 1) AS area_km2
-FROM 'https://data.source.coop/portolan-mirrors/geoboundaries/adm2/cgaz_adm2.parquet'
+FROM 'https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm2/cgaz_adm2.parquet'
 WHERE bbox.xmin < 36.9 AND bbox.xmax > 36.7
   AND bbox.ymin < -1.2 AND bbox.ymax > -1.4
 ORDER BY area_km2 LIMIT 6;

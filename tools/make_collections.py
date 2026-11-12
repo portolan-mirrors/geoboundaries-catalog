@@ -31,7 +31,7 @@ from gbcommon import (
 
 REPO = Path(__file__).resolve().parents[1]
 CATALOG = REPO / "catalog"
-PUBLIC_BASE = "https://data.source.coop/portolan-mirrors/geoboundaries"
+PUBLIC_BASE = "https://data.source.coop/portolan-mirrors/geoboundaries-catalog"
 
 LICENSE = "CC-BY-4.0"
 
@@ -54,7 +54,7 @@ PROVIDERS = [
             "PMTiles. Adds no boundaries and changes no geometry."
         ),
         "roles": ["processor", "host"],
-        "url": "https://github.com/portolan-mirrors/geoboundaries",
+        "url": "https://github.com/portolan-mirrors/geoboundaries-catalog",
     },
 ]
 

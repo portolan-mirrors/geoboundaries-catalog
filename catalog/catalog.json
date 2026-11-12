@@ -11,7 +11,7 @@
   "links": [
     {
       "rel": "self",
-      "href": "https://data.source.coop/portolan-mirrors/geoboundaries/catalog.json",
+      "href": "https://data.source.coop/portolan-mirrors/geoboundaries-catalog/catalog.json",
       "type": "application/json",
       "title": "geoBoundaries CGAZ Global Administrative Boundaries"
     },
@@ -35,12 +35,12 @@
     },
     {
       "rel": "vcs",
-      "href": "https://github.com/portolan-mirrors/geoboundaries",
+      "href": "https://github.com/portolan-mirrors/geoboundaries-catalog",
       "title": "Source repository"
     },
     {
       "rel": "issues",
-      "href": "https://github.com/portolan-mirrors/geoboundaries/issues",
+      "href": "https://github.com/portolan-mirrors/geoboundaries-catalog/issues",
       "title": "Issue tracker"
     },
     {
@@ -103,7 +103,7 @@
         "processor",
         "host"
       ],
-      "url": "https://github.com/portolan-mirrors/geoboundaries"
+      "url": "https://github.com/portolan-mirrors/geoboundaries-catalog"
     }
   ]
 }

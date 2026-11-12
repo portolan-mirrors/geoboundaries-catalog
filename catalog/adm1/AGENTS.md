@@ -17,7 +17,7 @@ Each factual claim is tagged with how it was established:
 
 3,224 first-level administrative units worldwide: states, provinces, regions,
 governorates, prefectures. Public root:
-`https://data.source.coop/portolan-mirrors/geoboundaries/catalog.json`
+`https://data.source.coop/portolan-mirrors/geoboundaries-catalog/catalog.json`
 
 This is a **mirror**. [geoBoundaries](https://www.geoboundaries.org/) is the
 producer and the authoritative source.

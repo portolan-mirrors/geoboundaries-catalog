@@ -6,7 +6,7 @@
 --
 --   duckdb -c "INSTALL httpfs; LOAD httpfs;
 --     SELECT shapeType, count(*) FROM
---     'https://data.source.coop/portolan-mirrors/geoboundaries/adm2/cgaz_adm2.parquet'
+--     'https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm2/cgaz_adm2.parquet'
 --     GROUP BY 1;"
 --
 -- Load the spatial extension first (LOAD spatial;) for the vertex query.

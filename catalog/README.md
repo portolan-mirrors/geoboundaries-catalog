@@ -109,16 +109,16 @@ attribute geoBoundaries publishes is carried, except one column that is NULL in
 every row of every file. The additions are measured: geodesic area and
 perimeter, a shape-compactness ratio, unit counts per country, and a bbox
 covering struct. Each collection's `.portolan/metadata.yaml` in the
-[repository](https://github.com/portolan-mirrors/geoboundaries) records the
+[repository](https://github.com/portolan-mirrors/geoboundaries-catalog) records the
 complete transform list and the known issues.
 
 The pipeline is five scripts, each runnable on its own:
-[fetch_sources.py](https://github.com/portolan-mirrors/geoboundaries/blob/main/tools/fetch_sources.py),
-[build_boundaries.py](https://github.com/portolan-mirrors/geoboundaries/blob/main/tools/build_boundaries.py),
-[build_names.py](https://github.com/portolan-mirrors/geoboundaries/blob/main/tools/build_names.py),
-[build_pmtiles.py](https://github.com/portolan-mirrors/geoboundaries/blob/main/tools/build_pmtiles.py)
+[fetch_sources.py](https://github.com/portolan-mirrors/geoboundaries-catalog/blob/main/tools/fetch_sources.py),
+[build_boundaries.py](https://github.com/portolan-mirrors/geoboundaries-catalog/blob/main/tools/build_boundaries.py),
+[build_names.py](https://github.com/portolan-mirrors/geoboundaries-catalog/blob/main/tools/build_names.py),
+[build_pmtiles.py](https://github.com/portolan-mirrors/geoboundaries-catalog/blob/main/tools/build_pmtiles.py)
 and
-[make_styles.py](https://github.com/portolan-mirrors/geoboundaries/blob/main/tools/make_styles.py).
+[make_styles.py](https://github.com/portolan-mirrors/geoboundaries-catalog/blob/main/tools/make_styles.py).
 
 ## Read this before querying
 
@@ -139,7 +139,7 @@ INSTALL httpfs; LOAD httpfs;
 
 -- The ten countries the composite divides most finely
 SELECT shapeName, shapeGroup, adm1_units, adm2_units
-FROM 'https://data.source.coop/portolan-mirrors/geoboundaries/adm0/cgaz_adm0.parquet'
+FROM 'https://data.source.coop/portolan-mirrors/geoboundaries-catalog/adm0/cgaz_adm0.parquet'
 WHERE shapeType = 'ADM0'
 ORDER BY adm2_units DESC
 LIMIT 10;
@@ -148,7 +148,7 @@ LIMIT 10;
 ```sql
 -- Autocomplete, from the 3.6 MB index
 SELECT name, country_name, level, name_dupes
-FROM 'https://data.source.coop/portolan-mirrors/geoboundaries/names/cgaz_names.parquet'
+FROM 'https://data.source.coop/portolan-mirrors/geoboundaries-catalog/names/cgaz_names.parquet'
 WHERE name_norm LIKE 'zurich%'
 ORDER BY level;
 ```

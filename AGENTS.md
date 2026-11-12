@@ -73,6 +73,6 @@ step.
 ### The links back to this repository
 
 `catalog/catalog.json` carries a `vcs` link and an `issues` link, both absolute
-and both pointing at `https://github.com/portolan-mirrors/geoboundaries`. The
+and both pointing at `https://github.com/portolan-mirrors/geoboundaries-catalog`. The
 repository sits outside the published catalog, so a relative href would resolve
 against the public base URL and point at a bucket path that holds nothing.

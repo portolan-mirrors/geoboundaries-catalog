@@ -5,7 +5,7 @@ geoBoundaries' **Comprehensive Global Administrative Zones** composite as
 cloud-native GeoParquet and PMTiles.
 
 Published at
-[source.coop/portolan-mirrors/geoboundaries](https://source.coop/portolan-mirrors/geoboundaries).
+[source.coop/portolan-mirrors/geoboundaries-catalog](https://source.coop/portolan-mirrors/geoboundaries-catalog).
 The catalog metadata lives in this repository; the data lives in object storage
 beside it.
 
