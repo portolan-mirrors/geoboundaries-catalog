@@ -140,8 +140,8 @@
       "roles": [
         "metadata"
       ],
-      "file:size": 5264,
-      "file:checksum": "122069e02ded3daa18220af81de8b6b5f5fdff9c4d761f5b22525affcc15417a23bb",
+      "file:size": 5965,
+      "file:checksum": "122005fec225a38a077c01820ef5d04da85cca06247b677df784a450cb0ee4a654d5",
       "description": "The kilobyte a client fetches before the index: its size, row group count, checksum, catalog version, the URL and row count of every boundary and display file, and the attribution each one requires with a share_alike flag. Also documents the level-0 join (country/shapeGroup, no shapeID) and the absent cnmw:catalog_version footer metadata."
     },
     "pmtiles": {
