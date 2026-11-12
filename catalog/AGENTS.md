@@ -110,6 +110,35 @@ index points. The GeoParquet files are for querying. Do not download a
 GeoParquet file to draw a map: the ADM0 file is 97 MB and its PMTiles archive
 is 7 MB.
 
+## How this catalog was built
+
+Five scripts in the
+[source repository](https://github.com/portolan-mirrors/geoboundaries/tree/main/tools),
+each runnable on its own, with no step hidden in a notebook:
+
+```bash
+python3 tools/fetch_sources.py      # 547 MB of GeoPackages from upstream
+python3 tools/build_boundaries.py   # -> 3 GeoParquet files, ~70 s
+python3 tools/build_names.py        # -> the search index, ~5 s
+python3 tools/build_pmtiles.py      # -> 4 PMTiles archives, ~12 min
+python3 tools/make_styles.py        # -> 15 style JSONs
+python3 tools/make_thumbnails.py    # -> 4 thumbnails
+python3 tools/make_collections.py   # -> 4 collection.json
+```
+
+The tool chosen at each step, and why:
+
+| step | tool | why that one |
+|---|---|---|
+| GeoPackage to Parquet | `ogr2ogr -f Parquet -a_srs EPSG:4326` | About a second per level, against minutes for a DuckDB spatial scan of the same file. `-a_srs` is what repairs the missing CRS. |
+| Measures, Hilbert order | DuckDB 1.4 with `spatial` | `ST_Hilbert` over a fixed whole-globe envelope, so all four files sit on one comparable curve. |
+| The Parquet write | PyArrow | The only writer here that honours an exact small row group size and writes the page index. `gpio sort hilbert` snaps row groups up to a 2,048-row writer vector, which would put all 218 ADM0 rows in one group. |
+| Vector tiles | `ogr2ogr -f GeoJSONSeq` piped to `tippecanoe` | No intermediate GeoJSON on disk. `--detect-shared-borders` keeps a shared edge between neighbours simplified identically, so the composite does not open hairline gaps. |
+| Validation | `gpq validate`, `rashid`, `stac-check` | `gpq validate` passes 20 of 20 checks on all four files. |
+
+`tools/distributions.sql` reruns every distribution behind every style class
+break and every count quoted in this catalog's prose.
+
 ## Quirks that produce silently wrong answers
 
 **The GeoParquet covering column is named `bbox`, and GDAL would have named it
