@@ -1,0 +1,54 @@
+{
+  "version": 8,
+  "name": "First-level unit area",
+  "sources": {
+    "data": {
+      "type": "vector",
+      "url": "pmtiles://../adm1.pmtiles"
+    }
+  },
+  "layers": [
+    {
+      "id": "adm1-fill",
+      "type": "fill",
+      "source": "data",
+      "source-layer": "adm1",
+      "paint": {
+        "fill-color": [
+          "step",
+          [
+            "coalesce",
+            [
+              "get",
+              "area_km2"
+            ],
+            0
+          ],
+          "#e2f4f2",
+          500,
+          "#a8dfd9",
+          3000,
+          "#60bcbd",
+          12000,
+          "#3387a8",
+          50000,
+          "#275a8f",
+          200000,
+          "#1d3167"
+        ],
+        "fill-opacity": 0.85,
+        "fill-outline-color": "rgba(40,40,40,0.35)"
+      }
+    },
+    {
+      "id": "adm1-line",
+      "type": "line",
+      "source": "data",
+      "source-layer": "adm1",
+      "paint": {
+        "line-color": "rgba(30,30,30,0.55)",
+        "line-width": 0.4
+      }
+    }
+  ]
+}

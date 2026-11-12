@@ -1,0 +1,54 @@
+{
+  "version": 8,
+  "name": "Indexed names by administrative level",
+  "sources": {
+    "data": {
+      "type": "vector",
+      "url": "pmtiles://../names.pmtiles"
+    }
+  },
+  "layers": [
+    {
+      "id": "names-circle",
+      "type": "circle",
+      "source": "data",
+      "source-layer": "names",
+      "paint": {
+        "circle-color": [
+          "step",
+          [
+            "coalesce",
+            [
+              "get",
+              "level"
+            ],
+            0
+          ],
+          "#a63f13",
+          1,
+          "#f4a23c",
+          2,
+          "#fff0c9"
+        ],
+        "circle-radius": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          0,
+          1.1,
+          4,
+          2.6,
+          8,
+          5.0
+        ],
+        "circle-opacity": 0.85,
+        "circle-stroke-width": 0.3,
+        "circle-stroke-color": "rgba(30,30,30,0.5)"
+      }
+    }
+  ]
+}

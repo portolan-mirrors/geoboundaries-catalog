@@ -1,0 +1,52 @@
+{
+  "version": 8,
+  "name": "First-level units per country",
+  "sources": {
+    "data": {
+      "type": "vector",
+      "url": "pmtiles://../adm0.pmtiles"
+    }
+  },
+  "layers": [
+    {
+      "id": "adm0-fill",
+      "type": "fill",
+      "source": "data",
+      "source-layer": "adm0",
+      "paint": {
+        "fill-color": [
+          "step",
+          [
+            "coalesce",
+            [
+              "get",
+              "adm1_units"
+            ],
+            0
+          ],
+          "#e7c388",
+          2,
+          "#d19a4e",
+          11,
+          "#b26f2c",
+          26,
+          "#8a4a1c",
+          51,
+          "#5c2d11"
+        ],
+        "fill-opacity": 0.85,
+        "fill-outline-color": "rgba(40,40,40,0.35)"
+      }
+    },
+    {
+      "id": "adm0-line",
+      "type": "line",
+      "source": "data",
+      "source-layer": "adm0",
+      "paint": {
+        "line-color": "rgba(30,30,30,0.55)",
+        "line-width": 0.4
+      }
+    }
+  ]
+}

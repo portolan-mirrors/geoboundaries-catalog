@@ -1,0 +1,44 @@
+{
+  "version": 8,
+  "name": "Recognized boundary or disputed area",
+  "sources": {
+    "data": {
+      "type": "vector",
+      "url": "pmtiles://../adm0.pmtiles"
+    }
+  },
+  "layers": [
+    {
+      "id": "adm0-fill",
+      "type": "fill",
+      "source": "data",
+      "source-layer": "adm0",
+      "paint": {
+        "fill-color": [
+          "match",
+          [
+            "get",
+            "shapeType"
+          ],
+          "ADM0",
+          "#b5a07c",
+          "DISP",
+          "#c1272d",
+          "#cfcfcf"
+        ],
+        "fill-opacity": 0.85,
+        "fill-outline-color": "rgba(40,40,40,0.35)"
+      }
+    },
+    {
+      "id": "adm0-line",
+      "type": "line",
+      "source": "data",
+      "source-layer": "adm0",
+      "paint": {
+        "line-color": "rgba(30,30,30,0.55)",
+        "line-width": 0.4
+      }
+    }
+  ]
+}

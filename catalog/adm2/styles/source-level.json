@@ -1,0 +1,48 @@
+{
+  "version": 8,
+  "name": "What each polygon really is",
+  "sources": {
+    "data": {
+      "type": "vector",
+      "url": "pmtiles://../adm2.pmtiles"
+    }
+  },
+  "layers": [
+    {
+      "id": "adm2-fill",
+      "type": "fill",
+      "source": "data",
+      "source-layer": "adm2",
+      "paint": {
+        "fill-color": [
+          "match",
+          [
+            "get",
+            "shapeType"
+          ],
+          "ADM2",
+          "#9b55ad",
+          "ADM1",
+          "#f4a23c",
+          "ADM0",
+          "#2b8a4a",
+          "DISP",
+          "#c1272d",
+          "#cfcfcf"
+        ],
+        "fill-opacity": 0.85,
+        "fill-outline-color": "rgba(40,40,40,0.35)"
+      }
+    },
+    {
+      "id": "adm2-line",
+      "type": "line",
+      "source": "data",
+      "source-layer": "adm2",
+      "paint": {
+        "line-color": "rgba(30,30,30,0.55)",
+        "line-width": 0.4
+      }
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "version": 8,
+  "name": "Outline compactness",
+  "sources": {
+    "data": {
+      "type": "vector",
+      "url": "pmtiles://../adm2.pmtiles"
+    }
+  },
+  "layers": [
+    {
+      "id": "adm2-fill",
+      "type": "fill",
+      "source": "data",
+      "source-layer": "adm2",
+      "paint": {
+        "fill-color": [
+          "step",
+          [
+            "coalesce",
+            [
+              "get",
+              "compactness"
+            ],
+            0
+          ],
+          "#f4e6f8",
+          0.05,
+          "#dcbae4",
+          0.15,
+          "#bf87cb",
+          0.3,
+          "#9b55ad",
+          0.5,
+          "#702f87"
+        ],
+        "fill-opacity": 0.85,
+        "fill-outline-color": "rgba(40,40,40,0.35)"
+      }
+    },
+    {
+      "id": "adm2-line",
+      "type": "line",
+      "source": "data",
+      "source-layer": "adm2",
+      "paint": {
+        "line-color": "rgba(30,30,30,0.55)",
+        "line-width": 0.4
+      }
+    }
+  ]
+}

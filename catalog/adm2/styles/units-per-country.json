@@ -1,0 +1,52 @@
+{
+  "version": 8,
+  "name": "Second-level units in this country",
+  "sources": {
+    "data": {
+      "type": "vector",
+      "url": "pmtiles://../adm2.pmtiles"
+    }
+  },
+  "layers": [
+    {
+      "id": "adm2-fill",
+      "type": "fill",
+      "source": "data",
+      "source-layer": "adm2",
+      "paint": {
+        "fill-color": [
+          "step",
+          [
+            "coalesce",
+            [
+              "get",
+              "country_units"
+            ],
+            0
+          ],
+          "#dcbae4",
+          11,
+          "#bf87cb",
+          101,
+          "#9b55ad",
+          501,
+          "#702f87",
+          2001,
+          "#45175e"
+        ],
+        "fill-opacity": 0.85,
+        "fill-outline-color": "rgba(40,40,40,0.35)"
+      }
+    },
+    {
+      "id": "adm2-line",
+      "type": "line",
+      "source": "data",
+      "source-layer": "adm2",
+      "paint": {
+        "line-color": "rgba(30,30,30,0.55)",
+        "line-width": 0.4
+      }
+    }
+  ]
+}

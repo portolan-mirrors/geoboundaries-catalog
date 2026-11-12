@@ -1,0 +1,58 @@
+{
+  "version": 8,
+  "name": "Area of the named unit",
+  "sources": {
+    "data": {
+      "type": "vector",
+      "url": "pmtiles://../names.pmtiles"
+    }
+  },
+  "layers": [
+    {
+      "id": "names-circle",
+      "type": "circle",
+      "source": "data",
+      "source-layer": "names",
+      "paint": {
+        "circle-color": [
+          "step",
+          [
+            "coalesce",
+            [
+              "get",
+              "area_km2"
+            ],
+            0
+          ],
+          "#fff0c9",
+          10,
+          "#ffd27a",
+          100,
+          "#f4a23c",
+          1000,
+          "#da6a1f",
+          10000,
+          "#a63f13"
+        ],
+        "circle-radius": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          0,
+          1.1,
+          4,
+          2.6,
+          8,
+          5.0
+        ],
+        "circle-opacity": 0.85,
+        "circle-stroke-width": 0.3,
+        "circle-stroke-color": "rgba(30,30,30,0.5)"
+      }
+    }
+  ]
+}

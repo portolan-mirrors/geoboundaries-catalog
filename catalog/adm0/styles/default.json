@@ -1,0 +1,54 @@
+{
+  "version": 8,
+  "name": "Country area",
+  "sources": {
+    "data": {
+      "type": "vector",
+      "url": "pmtiles://../adm0.pmtiles"
+    }
+  },
+  "layers": [
+    {
+      "id": "adm0-fill",
+      "type": "fill",
+      "source": "data",
+      "source-layer": "adm0",
+      "paint": {
+        "fill-color": [
+          "step",
+          [
+            "coalesce",
+            [
+              "get",
+              "area_km2"
+            ],
+            0
+          ],
+          "#f7e3c0",
+          1000,
+          "#e7c388",
+          25000,
+          "#d19a4e",
+          150000,
+          "#b26f2c",
+          600000,
+          "#8a4a1c",
+          2500000,
+          "#5c2d11"
+        ],
+        "fill-opacity": 0.85,
+        "fill-outline-color": "rgba(40,40,40,0.35)"
+      }
+    },
+    {
+      "id": "adm0-line",
+      "type": "line",
+      "source": "data",
+      "source-layer": "adm0",
+      "paint": {
+        "line-color": "rgba(30,30,30,0.55)",
+        "line-width": 0.4
+      }
+    }
+  ]
+}

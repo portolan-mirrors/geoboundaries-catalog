@@ -4,14 +4,21 @@
   "stac_extensions": [
     "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json"
   ],
-  "id": "example-catalog",
-  "title": "Example Catalog",
-  "description": "TODO(setup): one or two sentences saying what this catalog holds, who produced the data, and who it is for. A person and an agent both read this first.",
+  "id": "geoboundaries-cgaz",
+  "title": "geoBoundaries CGAZ Global Administrative Boundaries",
+  "description": "Every administrative boundary in geoBoundaries' Comprehensive Global Administrative Zones (CGAZ) composite, mirrored as cloud-native GeoParquet and PMTiles. Three boundary collections cover the globe seamlessly: 218 country-level units, 3,224 first-level units and 49,349 second-level units, built by [William & Mary geoLab](https://geolab.wm.edu/) from country submissions clipped to US Department of State international boundaries, with disputed areas carried as polygons of their own. A fourth collection is a name search index, one row per named unit across all three levels, sorted so that a client can resolve a typed prefix with range requests instead of a download. This is a mirror; [geoBoundaries](https://www.geoboundaries.org/) is the authoritative source. Read the [agent guide](AGENTS.md) before you query it.",
   "links": [
+    {
+      "rel": "self",
+      "href": "https://data.source.coop/portolan-mirrors/geoboundaries/catalog.json",
+      "type": "application/json",
+      "title": "geoBoundaries CGAZ Global Administrative Boundaries"
+    },
     {
       "rel": "root",
       "href": "./catalog.json",
-      "type": "application/json"
+      "type": "application/json",
+      "title": "geoBoundaries CGAZ Global Administrative Boundaries"
     },
     {
       "rel": "describedby",
@@ -27,13 +34,75 @@
     },
     {
       "rel": "vcs",
-      "href": "https://github.com/TODO(setup)",
+      "href": "https://github.com/portolan-mirrors/geoboundaries",
       "title": "Source repository"
     },
     {
       "rel": "issues",
-      "href": "https://github.com/TODO(setup)/issues",
+      "href": "https://github.com/portolan-mirrors/geoboundaries/issues",
       "title": "Issue tracker"
+    },
+    {
+      "rel": "via",
+      "href": "https://www.geoboundaries.org/globalDownloads.html",
+      "type": "text/html",
+      "title": "geoBoundaries CGAZ downloads (upstream source)"
+    },
+    {
+      "rel": "cite-as",
+      "href": "https://doi.org/10.1371/journal.pone.0231866",
+      "type": "text/html",
+      "title": "Runfola et al. (2020), geoBoundaries: A global database of political administrative boundaries, PLoS ONE 15(4): e0231866"
+    },
+    {
+      "rel": "license",
+      "href": "https://creativecommons.org/licenses/by/4.0/",
+      "type": "text/html",
+      "title": "Creative Commons Attribution 4.0 International"
+    },
+    {
+      "rel": "child",
+      "href": "./adm0/collection.json",
+      "type": "application/json",
+      "title": "CGAZ ADM0 - Country Boundaries"
+    },
+    {
+      "rel": "child",
+      "href": "./adm1/collection.json",
+      "type": "application/json",
+      "title": "CGAZ ADM1 - First-Level Administrative Boundaries"
+    },
+    {
+      "rel": "child",
+      "href": "./adm2/collection.json",
+      "type": "application/json",
+      "title": "CGAZ ADM2 - Second-Level Administrative Boundaries"
+    },
+    {
+      "rel": "child",
+      "href": "./names/collection.json",
+      "type": "application/json",
+      "title": "CGAZ Name Search Index"
+    }
+  ],
+  "providers": [
+    {
+      "name": "geoBoundaries, William & Mary geoLab",
+      "description": "The geoBoundaries Global Database of Political Administrative Boundaries, built by the community and William & Mary geoLab. CGAZ composites country submissions against US Department of State international boundaries.",
+      "roles": [
+        "producer",
+        "licensor"
+      ],
+      "url": "https://www.geoboundaries.org/"
+    },
+    {
+      "name": "Portolan Mirrors",
+      "description": "Republishes the CGAZ release as cloud-native GeoParquet and PMTiles. Adds no boundaries and changes no geometry.",
+      "roles": [
+        "processor",
+        "host"
+      ],
+      "url": "https://github.com/portolan-mirrors/geoboundaries"
     }
   ]
 }
