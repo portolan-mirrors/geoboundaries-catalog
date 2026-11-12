@@ -1,0 +1,110 @@
+# Human-enriched metadata for the adm0 collection.
+#
+# This file is tracked in git and is never published: tools/publish.py skips
+# every dot-directory. It is the canonical home for the facts below, and
+# README.md carries the human-facing rendering of them. Keep the two in step.
+
+license: CC-BY-4.0
+license_url: https://creativecommons.org/licenses/by/4.0/
+
+citation: >
+  Runfola, D. et al. (2020) geoBoundaries: A global database of political
+  administrative boundaries. PLoS ONE 15(4): e0231866.
+  https://doi.org/10.1371/journal.pone.0231866
+doi: 10.1371/journal.pone.0231866
+
+attribution: >
+  geoBoundaries (www.geoboundaries.org). Country outlines derive from the US
+  Department of State Large Scale International Boundaries file.
+
+source_url: https://www.geoboundaries.org/globalDownloads.html
+
+processing_notes: >
+  Mirrored from
+  https://github.com/wmgeolab/geoBoundaries/raw/main/releaseData/CGAZ/geoBoundariesCGAZ_ADM0.gpkg
+  (162,144,256 bytes), downloaded 2026-11-12. CGAZ is served from the default
+  branch through git-lfs, so the URL does not pin a version. The release
+  mirrored here is commit 4004e96433a2bdc54cac2b88d7d2e694c89cb818 of
+  2024-04-20, the last commit that changed any file under releaseData/CGAZ,
+  found with: gh api
+  "repos/wmgeolab/geoBoundaries/commits?path=releaseData/CGAZ&per_page=1".
+  The newest tagged geoBoundaries release is v6.0.0 of 2023-09-14, which is
+  older than the CGAZ files on the branch.
+
+  How CGAZ ADM0 is built upstream, from
+  https://github.com/wmgeolab/geoBoundaryBot/blob/main/gbCGAZBuild.py: the US
+  Department of State Large Scale International Boundaries file
+  (dta/usDoSLSIB_Mar2020.geojson) is split into non-disputed features and
+  features whose COUNTRY_NA contains "(disp)"; each set is dissolved on
+  ISO_CODE with mapshaper; the two are merged, cleaned with
+  "-clean gap-fill-area=10000km2 keep-shapes", and written out. The simplify
+  step that the ADM1 and ADM2 levels get is commented out for this level, so
+  ADM0 carries LSIB geometry at full resolution: 10,101,960 vertices across
+  218 units, a mean of 46,339 per unit.
+
+  Transforms applied here, and nothing else. (1) EPSG:4326 assigned with
+  ogr2ogr -a_srs, because the upstream GeoPackage declares srs_id 0,
+  "Undefined geographic SRS", for coordinates that are plainly longitude and
+  latitude in degrees. No reprojection. (2) The all-NULL "id" column dropped;
+  it is 0 non-null of 218 rows, and the upstream build lists "id" in its
+  mapshaper -drop fields= call, so the surviving empty column is a TopoJSON
+  to GeoPackage artifact. (3) Rows reordered along a Hilbert curve over the
+  whole globe. (4) area_km2, perimeter_km, compactness, adm1_units and
+  adm2_units derived; see tools/build_boundaries.py for the exact SQL.
+  (5) Written as GeoParquet 1.1, WKB, zstd level 15, bbox covering column,
+  Parquet page index, 4 rows per row group.
+
+known_issues: >
+  **ADM0 publishes no shapeID.** The ADM1 and ADM2 levels carry one; this
+  level does not, so shapeGroup is the only join key here. The names
+  collection leaves shape_id NULL for its level-0 rows for the same reason.
+
+  **These are not the boundaries a country claims for itself.** CGAZ clips to
+  US Department of State international boundaries. geoBoundaries' own
+  single-country releases represent each nation "as they would represent
+  themselves", and two of those can overlap. These do not. If sovereignty
+  matters to your use, this is the wrong product.
+
+  **20 rows are disputed areas, not countries.** shapeType is DISP for Abyei,
+  Aksai Chin, CH-IN, Demchok, Dragonja, Dramana-Shakatoe, Falkland Islands
+  (UK), Gaza Strip, Isla Brasilera, Kalapani, Koualou, Liancourt Rocks, No
+  Man's Land, Paracel Is, Sanafir & Tiran Is., Senkakus, Siachen-Saltoro,
+  Spratly Is, West Bank and Western Sahara. Their shapeGroup is a
+  geoBoundaries-internal code 111 to 129, not an ISO code, except Western
+  Sahara which uses ESH. A query that assumes shapeGroup is ISO 3166-1
+  alpha-3 gets 20 rows wrong. Filter on shapeType = 'ADM0' for 198
+  recognized countries.
+
+  **Territories are merged into their parent country.** The upstream build
+  maps LSIB names such as "Greenland (Den)" and "Netherlands [Caribbean]" on
+  to the parent state, so Greenland is part of the Denmark polygon and there
+  is no separate row for it. 218 rows is not a list of 218 sovereign states.
+
+  **ADM0 is the heaviest level, not the lightest.** 97 MB for 218 rows,
+  against 76 MB for 3,224 ADM1 rows, because this level is unsimplified LSIB
+  while the other two are simplified. Use the PMTiles archive to draw
+  country outlines; the GeoParquet is for analysis.
+
+  **Areas are measured, not official.** area_km2 is geodesic area computed on
+  the published geometry. For ADM0 that geometry is full-resolution, so the
+  numbers are close to published figures (Albania 28,679 against 28,748
+  km2), but they are still derived and not authoritative.
+
+  **No validity dates.** geoBoundaries records a boundaryYearRepresented per
+  source boundary; the CGAZ build does not carry it, so there is no way to
+  tell from this file which year a boundary represents. The collection's
+  temporal extent is the upstream release date instead.
+
+  **CC BY 4.0, with one inconsistency upstream.** geoboundaries.org states CC
+  BY 4.0 throughout. The geoBoundaries repository README says "open license
+  (CC BY 4.0 / ODbL)". The website is the authority used here, and gbOpen,
+  which CGAZ is built from, is the release geoBoundaries describes as
+  "CC-BY 4.0 compliant".
+
+  **87 of the 218 geometries are not OGC-valid.** ST_IsValid is false for
+  them, and the same 87 fail on a direct conversion of the upstream
+  GeoPackage, so the invalidity is upstream and no geometry operation here
+  introduced it. Rendering and bbox queries are unaffected; an overlay,
+  union or intersection is not. Repair with ST_MakeValid(geometry) before
+  any topological work. Count with: SELECT count(*) FROM adm0 WHERE NOT
+  ST_IsValid(geometry).

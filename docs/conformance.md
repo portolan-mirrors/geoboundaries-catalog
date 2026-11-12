@@ -47,6 +47,60 @@ Then add the rule id to ACCEPTED in tests/test_conformance.py. Both, or
 neither.
 -->
 
+## Advisory findings this catalog does not act on
+
+These are not deviations. `rashid` reports no error-severity finding against
+this catalog, and the `ACCEPTED` list above is empty. The entries below are
+advisory output from `portolan check` and from `gpio check`, recorded here so
+nobody has to rediscover the reasoning.
+
+### PTL-PRO-002: no `canonical` link on the mirror collections
+
+`portolan check` suggests a `rel: canonical` link on every mirror collection,
+"if the upstream publishes its own STAC catalog". geoBoundaries publishes
+GeoJSON, Shapefile, GeoPackage and a JSON metadata API, and no STAC. There is
+therefore no canonical STAC object to point at, and the `via` link to
+[the CGAZ download page](https://www.geoboundaries.org/globalDownloads.html)
+plus the `source-gpkg` asset carry the provenance instead. Add a `canonical`
+link if geoBoundaries ever publishes STAC.
+
+### `portolan check`: "8 registered asset(s) are missing from disk"
+
+The GeoParquet and PMTiles assets are not in the repository, by design. They
+are built into `../geoboundaries-staging/publish` and uploaded by
+`tools/upload_data.py`. `portolan check` walks the metadata tree and cannot
+see them. The same split is why `tests/test_links.py` takes `CI_LIGHT=1`.
+
+### `gpio check`: "row count per group is very low"
+
+`gpio check` wants 10,000 to 200,000 rows per row group and warns about all
+four files here, which use 4, 64, 512 and 1,536. That guidance is written for
+scan-heavy analytics, where a large row group amortizes per-group overhead
+across a full-table read.
+
+This catalog exists because the CGAZ mirror it replaces followed that
+guidance: all 49,349 ADM2 rows in one row group, so fetching one
+municipality's geometry meant reading the whole geometry column chunk. Each
+size here was set from the file's measured compressed bytes per row so that a
+row group is 1.0 to 1.8 MB, which is what one single-feature range request
+costs. The search index targets 100-150 KiB per group instead, measured
+against prefix-lookup latency.
+
+The tradeoff is real and accepted: a full-table scan of these files reads more
+footer metadata than it would at 50,000 rows per group. The ADM2 footer is
+226,817 bytes, which is 0.2% of the file.
+
+### Thumbnails are not chiitiler renders
+
+The canonical thumbnail path renders `styles/default.json` through MapLibre GL
+Native with chiitiler. That needs a clone of the chiitiler repository, which
+was not available in the environment this catalog was built in.
+`tools/make_thumbnails.py` instead parses the `step` or `match` expression out
+of each collection's own `styles/default.json` and colours the features by it,
+so the thumbnail and the legend the browser derives agree. What is missing is
+the basemap and MapLibre's line rendering. Regenerate with chiitiler when it
+is available; the asset hrefs and types do not change.
+
 ## Validator workarounds
 
 ### stac-check reports a dialect crash on every collection

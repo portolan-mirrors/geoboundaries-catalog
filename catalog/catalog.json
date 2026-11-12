@@ -7,6 +7,7 @@
   "id": "geoboundaries-cgaz",
   "title": "geoBoundaries CGAZ Global Administrative Boundaries",
   "description": "Every administrative boundary in geoBoundaries' Comprehensive Global Administrative Zones (CGAZ) composite, mirrored as cloud-native GeoParquet and PMTiles. Three boundary collections cover the globe seamlessly: 218 country-level units, 3,224 first-level units and 49,349 second-level units, built by [William & Mary geoLab](https://geolab.wm.edu/) from country submissions clipped to US Department of State international boundaries, with disputed areas carried as polygons of their own. A fourth collection is a name search index, one row per named unit across all three levels, sorted so that a client can resolve a typed prefix with range requests instead of a download. This is a mirror; [geoBoundaries](https://www.geoboundaries.org/) is the authoritative source. Read the [agent guide](AGENTS.md) before you query it.",
+  "updated": "2026-11-12T00:00:00Z",
   "links": [
     {
       "rel": "self",

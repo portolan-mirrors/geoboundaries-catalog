@@ -1,0 +1,281 @@
+{
+  "type": "Collection",
+  "stac_version": "1.1.0",
+  "stac_extensions": [
+    "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json",
+    "https://stac-extensions.github.io/table/v1.2.0/schema.json",
+    "https://stac-extensions.github.io/file/v2.1.0/schema.json",
+    "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json"
+  ],
+  "id": "adm0",
+  "title": "CGAZ ADM0 - Country Boundaries",
+  "description": "The 218 country-level polygons of the geoBoundaries CGAZ composite, as GeoParquet 1.1 with bbox covering metadata and spatially sorted into 55 row groups of 4 rows, so a client can pull one country's geometry in a single range request instead of downloading 97 MB. 198 rows are recognized countries and 20 are disputed areas carried as polygons of their own. The outlines come from the US Department of State Large Scale International Boundaries file, dissolved to one polygon per ISO code, and unlike the ADM1 and ADM2 levels they are not simplified: 10.1 million vertices across 218 units. Read the [agent guide](AGENTS.md) before querying, and note that CGAZ ADM0 publishes no `shapeID`, so `shapeGroup` is the join key at this level.",
+  "license": "CC-BY-4.0",
+  "keywords": [
+    "administrative boundaries",
+    "countries",
+    "ADM0",
+    "geoBoundaries",
+    "CGAZ",
+    "global",
+    "disputed territories",
+    "GeoParquet",
+    "PMTiles"
+  ],
+  "providers": [
+    {
+      "name": "geoBoundaries, William & Mary geoLab",
+      "description": "The geoBoundaries Global Database of Political Administrative Boundaries, built by the community and William & Mary geoLab. CGAZ composites country submissions against US Department of State international boundaries.",
+      "roles": [
+        "producer",
+        "licensor"
+      ],
+      "url": "https://www.geoboundaries.org/"
+    },
+    {
+      "name": "Portolan Mirrors",
+      "description": "Republishes the CGAZ release as cloud-native GeoParquet and PMTiles. Adds no boundaries and changes no geometry.",
+      "roles": [
+        "processor",
+        "host"
+      ],
+      "url": "https://github.com/portolan-mirrors/geoboundaries"
+    }
+  ],
+  "extent": {
+    "spatial": {
+      "bbox": [
+        [
+          -180.0,
+          -90.0,
+          180.0,
+          83.633392
+        ]
+      ]
+    },
+    "temporal": {
+      "interval": [
+        [
+          "2024-04-20T10:23:58Z",
+          "2024-04-20T10:23:58Z"
+        ]
+      ]
+    }
+  },
+  "updated": "2026-11-12T00:00:00Z",
+  "table:primary_geometry": "geometry",
+  "table:row_count": 218,
+  "table:columns": [
+    {
+      "name": "shapeName",
+      "type": "string",
+      "description": "Name of the administrative unit, carried through byte for byte as geoBoundaries published it. Not normalized, not transliterated, and not unique: 37 ADM2 rows have no name at all and 32 second-level units are called Washington. The names collection carries a folded form for searching."
+    },
+    {
+      "name": "shapeGroup",
+      "type": "string",
+      "description": "ISO 3166-1 alpha-3 code of the country the unit belongs to. The 20 disputed-area rows carry a geoBoundaries-internal code instead, 111 through 129, except Western Sahara which uses ESH. All 218 values appear in all three boundary files, which is what makes the composite seamless."
+    },
+    {
+      "name": "shapeType",
+      "type": "string",
+      "description": "What the polygon actually is: ADM0 a country, ADM1 a first-level unit, ADM2 a second-level unit, DISP a disputed area. It is not always ADM0 in this file. CGAZ fills gaps with the next coarser level available for a country, and carries the disputed areas in all three files. Here: 198 ADM0 and 20 DISP."
+    },
+    {
+      "name": "adm1_units",
+      "type": "int32",
+      "description": "Derived. How many rows the ADM1 collection holds for this shapeGroup. 1 means the composite has no first-level breakdown for that country and carries its ADM0 polygon in the ADM1 file instead. Ranges from 1 to 83."
+    },
+    {
+      "name": "adm2_units",
+      "type": "int32",
+      "description": "Derived. How many rows the ADM2 collection holds for this shapeGroup. Ranges from 1 to 5,570, the latter being Brazil."
+    },
+    {
+      "name": "area_km2",
+      "type": "double",
+      "description": "Derived. Geodesic area of the polygon in square kilometres on the WGS 84 ellipsoid. Measured from the simplified CGAZ geometry, so it is not the unit's official area. Agrees to better than 0.01% with the NSIDC EASE-Grid 2.0 Global projection that geoBoundaries says it uses for its own published area statistics."
+    },
+    {
+      "name": "perimeter_km",
+      "type": "double",
+      "description": "Derived. Geodesic perimeter in kilometres on the WGS 84 ellipsoid, from the simplified CGAZ geometry."
+    },
+    {
+      "name": "compactness",
+      "type": "double",
+      "description": "Derived. Polsby-Popper ratio, 4*pi*area/perimeter^2. 1.0 for a circle, falling towards 0 as an outline gets long or fragmented, so it separates archipelagos and river-defined units from blocky inland ones. Computed on the simplified geometry, so it reads lower than it would on the full-resolution single-country files."
+    },
+    {
+      "name": "bbox",
+      "type": "struct",
+      "description": "GeoParquet 1.1 bbox covering struct, with xmin, ymin, xmax and ymax as doubles in CRS84. A reader prunes row groups on this without decoding any geometry. It is also the extent to fly a map to."
+    },
+    {
+      "name": "geometry",
+      "type": "geometry",
+      "description": "Polygon or MultiPolygon as WKB, in CRS84 (longitude, latitude on WGS 84). The upstream GeoPackage declares no CRS at all; these are the same coordinates with EPSG:4326 assigned, not reprojected."
+    }
+  ],
+  "assets": {
+    "data": {
+      "href": "./cgaz_adm0.parquet",
+      "type": "application/vnd.apache.parquet",
+      "title": "Country Boundaries, GeoParquet 1.1 (55 row groups of 4 rows, zstd)",
+      "roles": [
+        "data"
+      ],
+      "file:size": 97209913,
+      "file:checksum": "1220264123fc1bd0d00e83e7b5cdc8445105f925a1216cd7094c5eacc41268e0a049",
+      "table:primary_geometry": "geometry"
+    },
+    "pmtiles": {
+      "href": "./adm0.pmtiles",
+      "type": "application/vnd.pmtiles",
+      "title": "Country Boundaries, vector tiles to zoom 6",
+      "roles": [
+        "visual",
+        "data"
+      ],
+      "file:size": 7149763,
+      "file:checksum": "12207a65d2c3bbbd3a94f321322f43d8820609971a115af28ad36677a0a431888af8",
+      "pmtiles:layers": [
+        "adm0"
+      ]
+    },
+    "style-default": {
+      "href": "./styles/default.json",
+      "type": "application/vnd.mapbox.style+json",
+      "title": "Country area",
+      "roles": [
+        "style",
+        "default"
+      ],
+      "file:size": 1003,
+      "file:checksum": "122050f15e3aa6ae712ea7ffcd8ee974d3322fd2ea45e16dcd0a204a09fb8680c115"
+    },
+    "style-status": {
+      "href": "./styles/status.json",
+      "type": "application/vnd.mapbox.style+json",
+      "title": "Recognized boundary or disputed area",
+      "roles": [
+        "style"
+      ],
+      "file:size": 843,
+      "file:checksum": "122061af4780412849f850763b8810a2253ac21e0320d315c33d9cbcf467aad439d8"
+    },
+    "style-adm1-units": {
+      "href": "./styles/adm1-units.json",
+      "type": "application/vnd.mapbox.style+json",
+      "title": "First-level units per country",
+      "roles": [
+        "style"
+      ],
+      "file:size": 968,
+      "file:checksum": "1220d48058866ae54e9e78494bba8ea0aa122e35be4954c804a312becc2b61567e2e"
+    },
+    "style-compactness": {
+      "href": "./styles/compactness.json",
+      "type": "application/vnd.mapbox.style+json",
+      "title": "Outline compactness",
+      "roles": [
+        "style"
+      ],
+      "file:size": 966,
+      "file:checksum": "12206b5e535c4cc56a0cba33c5186e751830173965d160cb6dea04daf236b0bde01f"
+    },
+    "source-gpkg": {
+      "href": "https://github.com/wmgeolab/geoBoundaries/raw/main/releaseData/CGAZ/geoBoundariesCGAZ_ADM0.gpkg",
+      "type": "application/geopackage+sqlite3",
+      "title": "geoBoundariesCGAZ_ADM0.gpkg, the upstream GeoPackage",
+      "roles": [
+        "data",
+        "source"
+      ],
+      "file:size": 162144256,
+      "file:checksum": "12206bdeb27072cf3759edfe9d31e037ebaf2481d9e0fa5ad18c1036346e42b4c41a",
+      "description": "The file this collection was built from, at its original location. Served through git-lfs from the default branch, so the URL is not version-pinned; the release this collection mirrors is the commit recorded in processing_notes."
+    },
+    "thumbnail": {
+      "href": "./adm0.thumb.png",
+      "type": "image/png",
+      "title": "Country Boundaries, rendered from the default style",
+      "roles": [
+        "thumbnail"
+      ],
+      "file:size": 201225,
+      "file:checksum": "12202f0478bfc3dbf5c8482468d876e3cae86ebf1528d5913e676db99348691ca26c"
+    }
+  },
+  "links": [
+    {
+      "rel": "root",
+      "href": "../catalog.json",
+      "type": "application/json",
+      "title": "geoBoundaries CGAZ Global Administrative Boundaries"
+    },
+    {
+      "rel": "parent",
+      "href": "../catalog.json",
+      "type": "application/json",
+      "title": "geoBoundaries CGAZ Global Administrative Boundaries"
+    },
+    {
+      "rel": "describedby",
+      "href": "./README.md",
+      "type": "text/markdown",
+      "title": "Collection README"
+    },
+    {
+      "rel": "agents",
+      "href": "./AGENTS.md",
+      "type": "text/markdown",
+      "title": "Collection agent guide"
+    },
+    {
+      "rel": "via",
+      "href": "https://www.geoboundaries.org/globalDownloads.html",
+      "type": "text/html",
+      "title": "geoBoundaries CGAZ downloads (upstream source)"
+    },
+    {
+      "rel": "cite-as",
+      "href": "https://doi.org/10.1371/journal.pone.0231866",
+      "type": "text/html",
+      "title": "Runfola et al. (2020), geoBoundaries: A global database of political administrative boundaries, PLoS ONE 15(4): e0231866"
+    },
+    {
+      "rel": "license",
+      "href": "https://creativecommons.org/licenses/by/4.0/",
+      "type": "text/html",
+      "title": "Creative Commons Attribution 4.0 International"
+    },
+    {
+      "rel": "pmtiles",
+      "href": "./adm0.pmtiles",
+      "type": "application/vnd.pmtiles",
+      "title": "Country Boundaries, vector tiles",
+      "pmtiles:layers": [
+        "adm0"
+      ]
+    },
+    {
+      "rel": "related",
+      "href": "../adm1/collection.json",
+      "type": "application/json",
+      "title": "CGAZ ADM1 - First-Level Administrative Boundaries"
+    },
+    {
+      "rel": "related",
+      "href": "../adm2/collection.json",
+      "type": "application/json",
+      "title": "CGAZ ADM2 - Second-Level Administrative Boundaries"
+    },
+    {
+      "rel": "related",
+      "href": "../names/collection.json",
+      "type": "application/json",
+      "title": "CGAZ Name Search Index"
+    }
+  ]
+}

@@ -1,0 +1,116 @@
+# Human-enriched metadata for the adm1 collection.
+#
+# Tracked in git, never published: tools/publish.py skips every
+# dot-directory. This is the canonical home for the facts below, and
+# README.md carries the human-facing rendering. Keep the two in step.
+
+license: CC-BY-4.0
+license_url: https://creativecommons.org/licenses/by/4.0/
+
+citation: >
+  Runfola, D. et al. (2020) geoBoundaries: A global database of political
+  administrative boundaries. PLoS ONE 15(4): e0231866.
+  https://doi.org/10.1371/journal.pone.0231866
+doi: 10.1371/journal.pone.0231866
+
+attribution: >
+  geoBoundaries (www.geoboundaries.org). Clipped to US Department of State
+  international boundaries.
+
+source_url: https://www.geoboundaries.org/globalDownloads.html
+
+processing_notes: >
+  Mirrored from
+  https://github.com/wmgeolab/geoBoundaries/raw/main/releaseData/CGAZ/geoBoundariesCGAZ_ADM1.gpkg
+  (144,470,016 bytes), downloaded 2026-11-12. The release mirrored here is
+  commit 4004e96433a2bdc54cac2b88d7d2e694c89cb818 of 2024-04-20, the last
+  commit that changed any file under releaseData/CGAZ.
+
+  How CGAZ ADM1 is built upstream, from
+  https://github.com/wmgeolab/geoBoundaryBot/blob/main/gbCGAZBuild.py: for
+  each ISO code, the country's gbOpen ADM1 GeoJSON is passed through
+  "mapshaper-xl <path> -simplify keep-shapes percentage=0.10 -clip <ADM0>",
+  so roughly a tenth of the vertices survive and the result is clipped to
+  that country's US Department of State outline. Where no ADM1 file exists
+  the script substitutes the country's ADM0 file, which is why 2 rows here
+  have shapeType ADM0. The per-country results are merged, cleaned with
+  "-clean gap-fill-area=10000km2 keep-shapes", and the 20 disputed-area
+  polygons are merged in. Measured here: 8,830,663 vertices across 3,224
+  units, a mean of 2,739.
+
+  The exact simplification parameter for the 2024-04-20 build cannot be
+  pinned to one script version. gbCGAZBuild.py at the repository root and
+  geoBoundaryBuilder/archive/cgazBuild.py both carry
+  "-simplify keep-shapes percentage=0.10"; the refactored
+  geoBoundaryBuilder/modules/cgaz_builder.py has that line commented out.
+  The 10% figure is quoted here from the two scripts that have it.
+
+  Transforms applied here, and nothing else. (1) EPSG:4326 assigned with
+  ogr2ogr -a_srs, because the upstream GeoPackage declares srs_id 0,
+  "Undefined geographic SRS". No reprojection. (2) The all-NULL "id" column
+  dropped, 0 non-null of 3,224 rows. (3) Rows reordered along a Hilbert
+  curve over the whole globe. (4) area_km2, perimeter_km, compactness and
+  country_units derived; the SQL is in tools/build_boundaries.py.
+  (5) Written as GeoParquet 1.1, WKB, zstd level 15, bbox covering column,
+  Parquet page index, 64 rows per row group.
+
+known_issues: >
+  **Not every row is a first-level unit.** 3,202 rows have shapeType ADM1,
+  20 are disputed areas and 2 are whole countries: Antarctica and Vatican
+  City, which have no first-level breakdown and are carried up so the
+  composite has no holes. Filter on shapeType = 'ADM1' when you want only
+  genuine first-level units.
+
+  **No parent key.** CGAZ publishes nothing that links an ADM1 unit to an
+  ADM2 unit inside it, or an ADM1 unit to anything but its country. shapeID
+  prefixes are per country and per level, so the ADM1 and ADM2 prefixes for
+  one country differ (AFG is 12653393 at ADM1 and 17698898 at ADM2) and
+  cannot be matched. Building the hierarchy means a spatial join, and on
+  simplified clipped geometry that will misassign units along shared edges.
+  This is the single biggest gap for anyone wanting a hierarchical gazetteer.
+
+  **Geometry is simplified and clipped, so it is not the source geometry.**
+  Roughly a tenth of the original vertices survive, and every outline is cut
+  to the US Department of State international boundary rather than to what
+  the country publishes. Use geoBoundaries' single-country gbOpen releases
+  when you need the full-resolution original.
+
+  **Areas and perimeters are measured on the simplified geometry.** They are
+  therefore smaller and smoother than official figures, and compactness
+  reads higher than it would on full-resolution outlines. They are
+  reproducible, not authoritative.
+
+  **38 names across the catalog are double-encoded upstream.** 25 of them
+  are in this file, including all 16 Chilean regions, which read
+  "RegiÃ³n de ValparaÃ­so" where "Región de Valparaíso" was meant, and 7
+  Portuguese districts. shapeName here is byte-for-byte what geoBoundaries
+  publishes, so the damage is carried through. The names collection repairs
+  it in its name_norm column only, so the units remain findable. Reported
+  upstream as a data issue in the geoBoundaries repository is the right fix.
+
+  **Unit names are not unique and not uniform.** 3,143 distinct names across
+  3,224 rows. Norwegian ADM2 and some ADM1 names carry a trailing " nor" and
+  surrounding quotation marks from their source file.
+
+  **No validity dates.** The CGAZ build drops geoBoundaries'
+  boundaryYearRepresented, so nothing in this file says which year a
+  boundary represents.
+
+  **CC BY 4.0, with one inconsistency upstream.** geoboundaries.org states
+  CC BY 4.0 throughout; the geoBoundaries repository README says
+  "CC BY 4.0 / ODbL". The website is the authority used here. Note that
+  individual source boundaries carry their own upstream licenses, which the
+  geoBoundaries API reports per boundary in boundaryLicense; CGAZ does not
+  carry that field, so the per-unit provenance is not recoverable from this
+  file.
+
+  **346 of the 3,224 geometries are not OGC-valid**, and the same 346 fail on
+  a direct conversion of the upstream GeoPackage, so the invalidity is
+  upstream. Rendering and bbox queries are unaffected; an overlay, union or
+  intersection is not. Repair with ST_MakeValid(geometry) first.
+
+  **Simplification collapses the smallest units.** 4 rows measure under
+  0.1 km2 and one, Kaafu in the Maldives, measures 0.0 km2 from 4 vertices.
+  These are real administrative units whose geometry did not survive the 10%
+  vertex reduction at a usable size. Do not read a near-zero area as a data
+  error, and do not use this level for small-island work.

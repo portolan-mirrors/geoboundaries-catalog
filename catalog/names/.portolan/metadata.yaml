@@ -1,0 +1,119 @@
+# Human-enriched metadata for the names collection.
+#
+# Tracked in git, never published: tools/publish.py skips every
+# dot-directory. This is the canonical home for the facts below, and
+# README.md carries the human-facing rendering. Keep the two in step.
+
+license: CC-BY-4.0
+license_url: https://creativecommons.org/licenses/by/4.0/
+
+citation: >
+  Runfola, D. et al. (2020) geoBoundaries: A global database of political
+  administrative boundaries. PLoS ONE 15(4): e0231866.
+  https://doi.org/10.1371/journal.pone.0231866
+doi: 10.1371/journal.pone.0231866
+
+attribution: >
+  geoBoundaries (www.geoboundaries.org).
+
+source_url: https://www.geoboundaries.org/globalDownloads.html
+
+processing_notes: >
+  Built by tools/build_names.py from the three boundary collections in this
+  catalog, not from the upstream GeoPackages, so the index and the
+  geometries it points at cannot disagree. Upstream release:
+  commit 4004e96433a2bdc54cac2b88d7d2e694c89cb818 of 2024-04-20. Extracted
+  2026-11-12.
+
+  Which rows are indexed. CGAZ is a seamless composite, so a country with no
+  ADM2 data appears in the ADM2 file carried up from a coarser level, and
+  the 20 disputed-area polygons appear in all three files. Indexing every
+  row of every file would return Antarctica three times for one query. A row
+  is indexed only from the file its own shapeType belongs to: shapeType in
+  (ADM0, DISP) from the ADM0 file at level 0, shapeType = ADM1 from the ADM1
+  file at level 1, shapeType = ADM2 from the ADM2 file at level 2. Rows with
+  a NULL shapeName are not indexed; there are 37, all in the ADM2 file. That
+  gives 218 + 3,202 + 48,978 = 52,398 rows.
+
+  name_norm. NFKD decomposition, combining marks (Unicode category Mn)
+  dropped, recomposed NFC, then Unicode case folding and strip. Scripts with
+  no Latin decomposition, such as Han and Cyrillic, are lowercased and
+  otherwise unchanged. Before normalizing, 38 rows whose upstream text is
+  double-encoded UTF-8 are repaired by encoding the string to Latin-1 and
+  decoding it as UTF-8, applied only when that round trip succeeds, changes
+  the string, and the string holds one of the mojibake lead sequences. All
+  38 were checked by hand: 16 Chilean regions, 7 Portuguese districts, 10
+  New Zealand local board and district names with macrons, 4 Peruvian
+  provinces, 2 Seychelles districts. No false positive. The repair touches
+  name_norm only; the name column stays byte-for-byte as published.
+
+  name_dupes counts rows sharing a name_norm across the whole index.
+  country_name is the ADM0 shapeName joined on shapeGroup. area_km2 is
+  copied from the boundary row and rounded to 3 decimals. geometry is
+  ST_PointOnSurface of the unit's polygon, which is guaranteed inside the
+  unit where a centroid is not. bbox is the unit's full extent copied from
+  its boundary row.
+
+  Layout. Sorted by (name_norm, level, country). Written as GeoParquet 1.1,
+  WKB point, zstd level 15, Parquet page index, 1,536 rows per row group.
+  The row group size targets bytes rather than rows: at this schema's 69
+  compressed bytes per row that is about 101 KiB per group, inside the
+  100-150 KiB band where a prefix lookup measured 5-25 ms and 106-430 KB
+  fetched. Doubling the group size doubles both. The bbox struct is float32
+  with every bound rounded outward, which halves what it costs in a file
+  meant to be loaded whole; verified against the ADM2 collection, 0 of
+  48,978 joined rows have a bbox narrower than their true extent.
+
+known_issues: >
+  **This is a sidecar, not a boundary dataset.** The geometry column is one
+  point per unit, for a marker. The unit's actual shape lives in the adm0,
+  adm1 or adm2 collection. Do not compute area, length or containment from
+  this file.
+
+  **The join key depends on the level.** shape_id is NULL for all 218
+  level-0 rows, because CGAZ ADM0 publishes no shapeID. Join level 0 to the
+  adm0 collection on country = shapeGroup, and levels 1 and 2 to their
+  collection on shape_id = shapeID. A single join on shape_id silently drops
+  every country and every disputed area.
+
+  **37 named-less ADM2 units are missing by design.** They exist in the adm2
+  collection with geometry and shapeIDs: 24 in Japan, 12 in Turkmenistan, 1
+  in China. A client that treats this index as a complete list of ADM2 units
+  will be 37 short.
+
+  **A name is not an identifier.** 8,140 rows share their name_norm with at
+  least one other unit, 878 of them with ten or more. 32 units fold to
+  "washington". Use name_dupes to decide when to disambiguate, and
+  country_name plus level to do it.
+
+  **country_name is NULL for the 20 disputed areas.** They have no ADM0
+  parent to join to, and their country column holds a geoBoundaries-internal
+  code 111 to 129 rather than an ISO code, except Western Sahara which uses
+  ESH.
+
+  **Display name and search name differ for 38 rows.** The name column
+  carries geoBoundaries' double-encoded text, for example
+  "RegiÃ³n de ValparaÃ­so". name_norm carries the repaired, folded form, so
+  the row is findable, but an interface that shows name will show the
+  mojibake. Showing a repaired name means repeating the repair client side;
+  the rule is in tools/build_names.py.
+
+  **No parent names.** There is no province or region field, because CGAZ
+  publishes no key linking a second-level unit to the first-level unit
+  containing it. An autocomplete can offer "Springfield, United States" but
+  not "Springfield, Illinois, United States" without a spatial join.
+
+  **name_norm folding is lossy on purpose, and is not a full collation.**
+  It strips combining marks, so "Unión" and "Union" collide, which is what
+  makes accent-insensitive search work and also inflates name_dupes for
+  such pairs. It does not transliterate: a Han or Arabic name is only
+  lowercased, so it is findable only by the same script.
+
+  **The float32 bbox is approximate by about a metre.** Rounded outward, so
+  it always contains the unit, but it is not the exact extent. The boundary
+  collections carry float64 bboxes if you need them.
+
+  **Prefix search works on the folded form, not on substrings.** The sort
+  makes a leading-prefix match cheap. A query for a name fragment in the
+  middle of a name has to scan, which means reading the whole name_norm
+  column.

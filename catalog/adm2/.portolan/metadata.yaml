@@ -1,0 +1,118 @@
+# Human-enriched metadata for the adm2 collection.
+#
+# Tracked in git, never published: tools/publish.py skips every
+# dot-directory. This is the canonical home for the facts below, and
+# README.md carries the human-facing rendering. Keep the two in step.
+
+license: CC-BY-4.0
+license_url: https://creativecommons.org/licenses/by/4.0/
+
+citation: >
+  Runfola, D. et al. (2020) geoBoundaries: A global database of political
+  administrative boundaries. PLoS ONE 15(4): e0231866.
+  https://doi.org/10.1371/journal.pone.0231866
+doi: 10.1371/journal.pone.0231866
+
+attribution: >
+  geoBoundaries (www.geoboundaries.org). Clipped to US Department of State
+  international boundaries.
+
+source_url: https://www.geoboundaries.org/globalDownloads.html
+
+processing_notes: >
+  Mirrored from
+  https://github.com/wmgeolab/geoBoundaries/raw/main/releaseData/CGAZ/geoBoundariesCGAZ_ADM2.gpkg
+  (240,824,320 bytes), downloaded 2026-11-12. The release mirrored here is
+  commit 4004e96433a2bdc54cac2b88d7d2e694c89cb818 of 2024-04-20, the last
+  commit that changed any file under releaseData/CGAZ.
+
+  How CGAZ ADM2 is built upstream, from
+  https://github.com/wmgeolab/geoBoundaryBot/blob/main/gbCGAZBuild.py: for
+  each ISO code, the country's gbOpen ADM2 GeoJSON is passed through
+  "mapshaper-xl <path> -simplify keep-shapes percentage=0.10 -clip <ADM0>".
+  Where no ADM2 file exists the script substitutes the country's ADM1 file,
+  and where that is missing too, its ADM0 file; that is why 312 rows here
+  have shapeType ADM1 and 2 have ADM0. The per-country results are merged,
+  cleaned with "-clean gap-fill-area=10000km2 keep-shapes", and the 20
+  disputed-area polygons are merged in. Measured here: 13,183,670 vertices
+  across 49,349 units, a mean of 267.
+
+  The exact simplification parameter for the 2024-04-20 build cannot be
+  pinned to one script version; see the note in the adm1 collection's
+  metadata.
+
+  Transforms applied here, and nothing else. (1) EPSG:4326 assigned with
+  ogr2ogr -a_srs, because the upstream GeoPackage declares srs_id 0,
+  "Undefined geographic SRS". No reprojection. (2) The all-NULL "id" column
+  dropped, 0 non-null of 49,349 rows. (3) Rows reordered along a Hilbert
+  curve over the whole globe. (4) area_km2, perimeter_km, compactness and
+  country_units derived; the SQL is in tools/build_boundaries.py.
+  (5) Written as GeoParquet 1.1, WKB, zstd level 15, bbox covering column,
+  Parquet page index, 512 rows per row group, which lands each row group at
+  about 1.05 MB.
+
+known_issues: >
+  **22 countries have no second-level data here.** Their rows are the
+  country's ADM1 polygons carried up instead, 312 of them, with shapeType
+  ADM1: Malta (68), Moldova (37), Montenegro (23), Marshall Islands (22),
+  Libya (22), Nauru (14), Trinidad and Tobago (14), Saint Kitts and Nevis
+  (14), Mauritius (12), Liechtenstein (11), Barbados (11), Dominica (10),
+  San Marino (9), Antigua and Barbuda (8), Andorra (7) and others. 2 more
+  rows are whole countries (Antarctica, Vatican City) and 20 are disputed
+  areas. A query that treats every row as a second-level unit is wrong for
+  334 of 49,349 rows. Filter on shapeType = 'ADM2' for the 49,015 genuine
+  ones.
+
+  **37 rows have no name at all.** shapeName is NULL for 24 rows in Japan,
+  12 in Turkmenistan and 1 in China. They are real polygons with real
+  shapeIDs and real geometry, and they are kept here, but they are left out
+  of the names collection because there is nothing to search for. Find them
+  with: SELECT shapeGroup, count(*) FROM adm2 WHERE shapeName IS NULL
+  GROUP BY 1.
+
+  **No parent key.** Nothing links an ADM2 unit to the ADM1 unit that
+  contains it. shapeID prefixes are per country and per level, so the ADM2
+  prefix for a country differs from its ADM1 prefix and the two cannot be
+  matched (AFG is 17698898 at ADM2 and 12653393 at ADM1). Reconstructing the
+  hierarchy needs a spatial join, which on simplified clipped geometry will
+  misassign units along shared edges.
+
+  **Names repeat heavily.** 45,116 distinct names over 49,312 named rows. 32
+  units fold to the name "washington", 26 each to "franklin" and
+  "jefferson". A name is not an identifier. The names collection carries a
+  name_dupes count so a client can tell when to disambiguate.
+
+  **"Second-level" means different things in different countries.** A row
+  may be a US county, a Brazilian município, a French commune or a Japanese
+  municipality. The level number is structural, not semantic, and areas
+  range from under 1 km2 to Antarctica's 12.4 million km2 in the same
+  column.
+
+  **Geometry is simplified and clipped.** Roughly a tenth of the original
+  vertices survive, and outlines are cut to US Department of State
+  international boundaries. Areas, perimeters and compactness are measured
+  on that geometry, so they are reproducible rather than authoritative.
+
+  **6 names in this file are double-encoded upstream**, 4 in Peru and 2 in
+  New Zealand plus the macron-bearing Auckland local board areas. shapeName
+  carries the damage through unchanged; the names collection repairs it in
+  name_norm only.
+
+  **No validity dates.** The CGAZ build drops geoBoundaries'
+  boundaryYearRepresented.
+
+  **CC BY 4.0, with one inconsistency upstream.** geoboundaries.org states
+  CC BY 4.0 throughout; the geoBoundaries repository README says
+  "CC BY 4.0 / ODbL". The website is the authority used here. Per-unit
+  source licenses, which the geoBoundaries API reports as boundaryLicense,
+  are not carried by CGAZ and so are not recoverable from this file.
+
+  **843 of the 49,349 geometries are not OGC-valid**, and the same 843 fail
+  on a direct conversion of the upstream GeoPackage, so the invalidity is
+  upstream. Rendering and bbox queries are unaffected; an overlay, union or
+  intersection is not. Repair with ST_MakeValid(geometry) first.
+
+  **Simplification collapses the smallest units.** 107 rows measure under
+  0.1 km2, concentrated in Saint Lucia's small urban districts and in
+  Pacific atolls. They are real units whose geometry did not survive the 10%
+  vertex reduction at a usable size.

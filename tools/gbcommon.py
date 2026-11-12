@@ -60,9 +60,16 @@ def gpkg_layer(level: int) -> str:
 ROW_GROUP_ROWS = {0: 4, 1: 64, 2: 512}
 
 # The search index is sorted by name_norm, so a client that wants a name
-# prefix fetches a contiguous run of row groups. 2,048 rows per group keeps
-# each group small enough that a two-letter prefix costs one or two requests.
-NAMES_ROW_GROUP_ROWS = 2048
+# prefix fetches a contiguous run of row groups. The target is bytes, not
+# rows: a row group of 100-150 KiB is what makes a prefix lookup a 5-25 ms
+# range request, and doubling the group size doubles both the latency and the
+# bytes fetched. At this schema's measured 83.7 compressed bytes per row,
+# 1,536 rows lands a group at about 129 KiB.
+#
+#   python3 -c "import pyarrow.parquet as pq, os; p='cgaz_names.parquet'; \
+#     print(os.path.getsize(p) / pq.read_metadata(p).num_rows)"
+NAMES_ROW_GROUP_ROWS = 1536
+NAMES_ROW_GROUP_TARGET_KIB = (100, 150)
 
 ZSTD_LEVEL = 15
 
@@ -89,6 +96,47 @@ def normalize_name(name: str | None) -> str | None:
     decomposed = unicodedata.normalize("NFKD", name)
     stripped = "".join(c for c in decomposed if not unicodedata.combining(c))
     return unicodedata.normalize("NFC", stripped).casefold().strip()
+
+
+def shrink_bbox_float32(bbox_array):
+    """Recast a float64 bbox struct to float32, rounding outward.
+
+    Halves what the bbox costs in a file small enough that a browser loads
+    the whole thing, which is the search index's primary consumption mode. A
+    naive cast is not safe: float32 rounds to nearest, so an xmin could round
+    *up* and leave part of the geometry outside the bbox that claims to cover
+    it, which silently breaks both row group pruning and a map fly-to. So
+    each minimum is nudged towards -inf and each maximum towards +inf
+    whenever the cast moved it the wrong way. The resulting box is never
+    smaller than the true one, which is what GeoParquet's covering requires.
+
+    float32 holds about 7 significant decimal digits, so a degree value keeps
+    roughly 1e-5 degrees, about a metre. That is far finer than CGAZ's
+    simplified geometry.
+    """
+    import numpy as np
+    import pyarrow as pa
+
+    def outward(values, towards):
+        exact = np.asarray(values, dtype=np.float64)
+        cast = exact.astype(np.float32)
+        wrong = (cast > exact) if towards < 0 else (cast < exact)
+        if wrong.any():
+            cast[wrong] = np.nextafter(
+                cast[wrong], np.float32(towards * np.inf)
+            )
+        return pa.array(cast, pa.float32())
+
+    bbox_array = bbox_array.combine_chunks()
+    return pa.StructArray.from_arrays(
+        [
+            outward(bbox_array.field("xmin").to_numpy(zero_copy_only=False), -1),
+            outward(bbox_array.field("ymin").to_numpy(zero_copy_only=False), -1),
+            outward(bbox_array.field("xmax").to_numpy(zero_copy_only=False), +1),
+            outward(bbox_array.field("ymax").to_numpy(zero_copy_only=False), +1),
+        ],
+        names=["xmin", "ymin", "xmax", "ymax"],
+    )
 
 
 def geo_metadata(

@@ -1,0 +1,72 @@
+# geoBoundaries CGAZ Global Administrative Boundaries
+
+> A mirror of geoBoundaries' Comprehensive Global Administrative Zones (CGAZ)
+> composite as cloud-native GeoParquet and PMTiles: 218 country polygons, 3,224
+> first-level units, 49,349 second-level units, plus a 3.6 MB name search index
+> across all three levels. Static files on object storage, no API, no
+> credentials. Produced by geoBoundaries at William & Mary geoLab; this catalog
+> republishes, it does not produce.
+
+Public root: https://data.source.coop/portolan-mirrors/geoboundaries/catalog.json
+
+This is a Portolan catalog, which is STAC 1.1.0 plus the Portolan profile. Every
+file is readable in place over HTTPS range requests. Four collections, each with
+a `collection.json`, a `README.md` for humans, an `AGENTS.md` for machine
+clients, a GeoParquet file, a PMTiles archive and three to four MapLibre styles.
+
+License: CC-BY-4.0. Attribution is required, and the required citation is
+Runfola et al. (2020), PLoS ONE 15(4): e0231866.
+
+## Read these first
+
+- [Catalog agent guide](https://data.source.coop/portolan-mirrors/geoboundaries/AGENTS.md): the collections, the join keys, and the four traps that produce wrong answers.
+- [Catalog README](https://data.source.coop/portolan-mirrors/geoboundaries/README.md): what is here, the license, the provenance, and the exact upstream release.
+- [Root catalog.json](https://data.source.coop/portolan-mirrors/geoboundaries/catalog.json): the STAC entry point.
+
+## Collections
+
+- [adm0 — Country Boundaries](https://data.source.coop/portolan-mirrors/geoboundaries/adm0/collection.json): 218 rows, 97 MB GeoParquet, 55 row groups of 4 rows. [agent guide](https://data.source.coop/portolan-mirrors/geoboundaries/adm0/AGENTS.md)
+- [adm1 — First-Level Administrative Boundaries](https://data.source.coop/portolan-mirrors/geoboundaries/adm1/collection.json): 3,224 rows, 76 MB, 51 row groups of 64 rows. [agent guide](https://data.source.coop/portolan-mirrors/geoboundaries/adm1/AGENTS.md)
+- [adm2 — Second-Level Administrative Boundaries](https://data.source.coop/portolan-mirrors/geoboundaries/adm2/collection.json): 49,349 rows, 101 MB, 97 row groups of 512 rows. [agent guide](https://data.source.coop/portolan-mirrors/geoboundaries/adm2/AGENTS.md)
+- [names — Name Search Index](https://data.source.coop/portolan-mirrors/geoboundaries/names/collection.json): 52,398 rows, 3.6 MB, sorted by folded name, 35 row groups of 1,536 rows. [agent guide](https://data.source.coop/portolan-mirrors/geoboundaries/names/AGENTS.md)
+
+## Data files
+
+- https://data.source.coop/portolan-mirrors/geoboundaries/adm0/cgaz_adm0.parquet
+- https://data.source.coop/portolan-mirrors/geoboundaries/adm1/cgaz_adm1.parquet
+- https://data.source.coop/portolan-mirrors/geoboundaries/adm2/cgaz_adm2.parquet
+- https://data.source.coop/portolan-mirrors/geoboundaries/names/cgaz_names.parquet
+- https://data.source.coop/portolan-mirrors/geoboundaries/adm0/adm0.pmtiles
+- https://data.source.coop/portolan-mirrors/geoboundaries/adm1/adm1.pmtiles
+- https://data.source.coop/portolan-mirrors/geoboundaries/adm2/adm2.pmtiles
+- https://data.source.coop/portolan-mirrors/geoboundaries/names/names.pmtiles
+
+## Start a query
+
+```sql
+INSTALL spatial; LOAD spatial; INSTALL httpfs; LOAD httpfs;
+
+SELECT name, country_name, level, name_dupes
+FROM 'https://data.source.coop/portolan-mirrors/geoboundaries/names/cgaz_names.parquet'
+WHERE name_norm LIKE 'zurich%'
+ORDER BY level;
+```
+
+## The four things that produce wrong answers
+
+1. `shapeType` is not the level of the file. CGAZ fills gaps with the next
+   coarser level, so the ADM2 file holds 312 first-level units and 2 whole
+   countries, and all three files hold the same 20 disputed areas.
+2. `shapeGroup` is not always an ISO 3166-1 alpha-3 code. The 20 disputed-area
+   rows carry `111` through `129`, except Western Sahara which uses `ESH`.
+3. The ADM0 file has no `shapeID` column. Join at level 0 on `shapeGroup`.
+4. Nothing in CGAZ links a second-level unit to the first-level unit containing
+   it. There is no parent key at any level.
+
+## Optional
+
+- [Upstream geoBoundaries](https://www.geoboundaries.org/): the authoritative source, including the full-resolution per-country releases this catalog does not mirror.
+- [CGAZ download page](https://www.geoboundaries.org/globalDownloads.html): the upstream description of what CGAZ is and how it differs from the per-country files.
+- [Source repository](https://github.com/portolan-mirrors/geoboundaries): the pipeline that built this catalog, the per-collection `.portolan/metadata.yaml` provenance records, and the issue tracker.
+- [Runfola et al. (2020)](https://doi.org/10.1371/journal.pone.0231866): the paper geoBoundaries asks you to cite.
+- [Portolan specification](https://github.com/portolan-sdi/portolan-spec): what this catalog conforms to.

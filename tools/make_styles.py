@@ -234,9 +234,11 @@ SPECS["names"] = [
     # default. Administrative level of each indexed name.
     #   SELECT level, count(*) FROM names GROUP BY 1
     #   -> 0 218 | 1 3202 | 2 48978
+    # Level 2 is 93% of the rows, so it takes the mid tone a reader can
+    # actually see; the rare level-0 points take the darkest.
     ("default", "Indexed names by administrative level", point_style(
         "Indexed names by administrative level", "names.pmtiles", "names",
-        step("level", [AMBER[4], AMBER[2], AMBER[0]], [1, 2]),
+        step("level", [AMBER[4], AMBER[3], AMBER[2]], [1, 2]),
     )),
     # How ambiguous a name is. 32 units are called Washington.
     #   -> unique 44258 | 2-3 5583 | 4-9 1679 | >=10 878

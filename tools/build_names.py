@@ -43,6 +43,7 @@ import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from gbcommon import (
+    shrink_bbox_float32,
     NAMES_ROW_GROUP_ROWS,
     PUBLISH,
     ZSTD_LEVEL,
@@ -169,12 +170,20 @@ def main() -> int:
     )
     table = table.take(idx)
 
+    # float32 bbox, rounded outward. See shrink_bbox_float32: the index is
+    # meant to be loaded whole in a browser, and four doubles per row was
+    # 1.9 MB of a 4.4 MB file.
+    narrowed = shrink_bbox_float32(table.column("bbox"))
+    table = table.set_column(
+        table.schema.get_field_index("bbox"), "bbox", narrowed
+    )
+
     bbox_col = table.column("bbox").combine_chunks()
     bbox = [
-        pc.min(bbox_col.field("xmin")).as_py(),
-        pc.min(bbox_col.field("ymin")).as_py(),
-        pc.max(bbox_col.field("xmax")).as_py(),
-        pc.max(bbox_col.field("ymax")).as_py(),
+        float(pc.min(bbox_col.field("xmin")).as_py()),
+        float(pc.min(bbox_col.field("ymin")).as_py()),
+        float(pc.max(bbox_col.field("xmax")).as_py()),
+        float(pc.max(bbox_col.field("ymax")).as_py()),
     ]
     meta = dict(table.schema.metadata or {})
     meta[b"geo"] = geo_metadata(bbox=bbox, geometry_types=["Point"])

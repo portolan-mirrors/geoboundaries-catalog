@@ -1,32 +1,154 @@
-# Example Catalog
+# geoBoundaries CGAZ Global Administrative Boundaries
 
-TODO(setup): replace this file. It is the front door to the published catalog,
-the page people land on at the public base URL. It is not the same document as
-the README in the repository root, which is never published.
+Every administrative boundary in the geoBoundaries **Comprehensive Global
+Administrative Zones** composite, republished as cloud-native GeoParquet and
+PMTiles you can query and draw without downloading anything.
+
+This is a **mirror**. [geoBoundaries](https://www.geoboundaries.org/), built by
+the community and [William & Mary geoLab](https://geolab.wm.edu/), produces the
+data and remains the authoritative source.
 
 ## What is here
 
-TODO(setup): the datasets, in one paragraph. Say what each collection covers,
-the area and the time range, and what a reader can do with it.
+Four collections.
+
+| collection | rows | size | what it is |
+|---|---|---|---|
+| `adm0` | 218 | 97 MB | Country outlines, plus 20 disputed areas |
+| `adm1` | 3,224 | 76 MB | States, provinces, regions, governorates |
+| `adm2` | 49,349 | 101 MB | Counties, districts, municipalities, communes |
+| `names` | 52,398 | 3.6 MB | A name search index across all three levels |
+
+The three boundary levels cover the globe seamlessly: every one of the 218
+country codes appears at every level, because where a country has no
+first- or second-level data CGAZ carries its coarser polygon up instead. The
+`shapeType` column says which you are actually looking at.
+
+Each boundary collection is GeoParquet 1.1 with bbox covering metadata, sorted
+along a Hilbert curve, and cut into small row groups — 55, 51 and 97 of them —
+so a client can fetch one unit's geometry in a range request of about 1 to
+1.8 MB instead of pulling the whole file.
+
+`names` is the piece built for autocomplete: one row per named unit, sorted by
+a folded form of the name, 3.6 MB in total. Load it whole in about a quarter of
+a second, or resolve a typed prefix from one or two 101 KiB row groups by range
+request. It carries the `shapeID` that joins back to the geometry, the extent
+to fly a map to, and a count of how many other units share the same name.
+
+A PMTiles archive accompanies every collection, for drawing.
+
+Per-country geoBoundaries releases (`gbOpen`, `gbHumanitarian`,
+`gbAuthoritative`) are **not** mirrored here. Those are full-resolution and
+represent each country as it represents itself; CGAZ is a different product.
 
 ## License
 
-TODO(setup): the SPDX identifier, or `other` with a link to the terms. Say who
-holds the rights and what a reuser has to attribute.
+**CC-BY-4.0.** geoBoundaries states:
+
+> the geoBoundaries Global Database of Political Administrative Boundaries
+> Database is an online, open license (CC BY 4.0) resource of information on
+> administrative boundaries (i.e., state, county) for every country in the
+> world. [...] All boundaries are available to view or download in common file
+> formats; the only requirement for use is acknowledgement.
+
+— [geoboundaries.org](https://www.geoboundaries.org/), which also links the
+[CC BY 4.0 license text](https://creativecommons.org/licenses/by/4.0/).
+
+**Attribution is required.** geoBoundaries asks for it in three forms, and this
+is their wording:
+
+- In written work: cite the PLoS ONE paper.
+
+  > Runfola, D. et al. (2020) geoBoundaries: A global database of political
+  > administrative boundaries. PLoS ONE 15(4): e0231866.
+  > [https://doi.org/10.1371/journal.pone.0231866](https://doi.org/10.1371/journal.pone.0231866)
+
+- On the web: "we ask that you put the name 'geoBoundaries' with a link back to
+  this website, [www.geoboundaries.org](https://www.geoboundaries.org/),
+  somewhere prominent on the page that uses the boundaries."
+- In other products: "we ask that you put the name 'geoBoundaries' somewhere
+  prominent in the product, for example in the credits or as a link in the help
+  menu."
+
+One inconsistency is worth recording: the
+[geoBoundaries repository README](https://github.com/wmgeolab/geoBoundaries)
+describes the project as "open license (CC BY 4.0 / ODbL)", where the website
+says CC BY 4.0 throughout. The website is treated as authoritative here, and
+CGAZ is built from `gbOpen`, which geoBoundaries describes as "CC-BY 4.0
+compliant". Individual source boundaries carry their own upstream licenses,
+which the geoBoundaries API reports per boundary; CGAZ does not carry that
+field, so per-unit license provenance is not recoverable from these files.
 
 ## Provenance
 
-TODO(setup): where the data came from. Say whether this catalog is the official
-publication from the producing organization, or a mirror of someone else's data.
-If it is a mirror, link the upstream and say how often it syncs.
+Built from the three CGAZ GeoPackages in the geoBoundaries core repository:
+
+- [geoBoundariesCGAZ_ADM0.gpkg](https://github.com/wmgeolab/geoBoundaries/raw/main/releaseData/CGAZ/geoBoundariesCGAZ_ADM0.gpkg) (162 MB)
+- [geoBoundariesCGAZ_ADM1.gpkg](https://github.com/wmgeolab/geoBoundaries/raw/main/releaseData/CGAZ/geoBoundariesCGAZ_ADM1.gpkg) (144 MB)
+- [geoBoundariesCGAZ_ADM2.gpkg](https://github.com/wmgeolab/geoBoundaries/raw/main/releaseData/CGAZ/geoBoundariesCGAZ_ADM2.gpkg) (241 MB)
+
+downloaded 2026-11-12. CGAZ is served from the default branch through git-lfs,
+so a URL does not pin a version. The release mirrored here is commit
+[`4004e96`](https://github.com/wmgeolab/geoBoundaries/commit/4004e96433a2bdc54cac2b88d7d2e694c89cb818)
+of 2024-04-20, the last commit that changed any file under
+`releaseData/CGAZ`. The newest tagged geoBoundaries release, v6.0.0, is older
+than that.
+
+geoBoundaries describes CGAZ as:
+
+> A global composite of the SSC ADM0, ADM1 and ADM2, clipped to international
+> boundaries (US Department of State), with gaps filled between borders.
+
+— [geoBoundaries README](https://github.com/wmgeolab/geoBoundaries), and on the
+[download page](https://www.geoboundaries.org/globalDownloads.html):
+"extensive simplification is performed [...] disputed areas are removed and
+replaced with polygons following US Department of State definitions."
+
+Nothing is filtered, reclassified or reprojected here. Every row and every
+attribute geoBoundaries publishes is carried, except one column that is NULL in
+every row of every file. The additions are measured: geodesic area and
+perimeter, a shape-compactness ratio, unit counts per country, and a bbox
+covering struct. Each collection's `.portolan/metadata.yaml` in the
+[repository](https://github.com/portolan-mirrors/geoboundaries) records the
+complete transform list and the known issues.
+
+The pipeline is five scripts, each runnable on its own:
+[fetch_sources.py](https://github.com/portolan-mirrors/geoboundaries/blob/main/tools/fetch_sources.py),
+[build_boundaries.py](https://github.com/portolan-mirrors/geoboundaries/blob/main/tools/build_boundaries.py),
+[build_names.py](https://github.com/portolan-mirrors/geoboundaries/blob/main/tools/build_names.py),
+[build_pmtiles.py](https://github.com/portolan-mirrors/geoboundaries/blob/main/tools/build_pmtiles.py)
+and
+[make_styles.py](https://github.com/portolan-mirrors/geoboundaries/blob/main/tools/make_styles.py).
+
+## Read this before querying
+
+Four things will give you wrong answers if you skip them, all covered in
+[AGENTS.md](AGENTS.md):
+
+- `shapeType` is not the level of the file you opened.
+- `shapeGroup` is a geoBoundaries code, not an ISO code, for the 20 disputed
+  areas.
+- The ADM0 file has no `shapeID` column at all.
+- Nothing in CGAZ links a second-level unit to the first-level unit containing
+  it.
 
 ## Access
 
-TODO(setup): one query someone can run without downloading anything, against a
-real published file. Run it before you paste it.
+```sql
+INSTALL httpfs; LOAD httpfs;
+
+-- The ten countries the composite divides most finely
+SELECT shapeName, shapeGroup, adm1_units, adm2_units
+FROM 'https://data.source.coop/portolan-mirrors/geoboundaries/adm0/cgaz_adm0.parquet'
+WHERE shapeType = 'ADM0'
+ORDER BY adm2_units DESC
+LIMIT 10;
+```
 
 ```sql
--- Example shape. Replace the URL and the columns with your own.
-INSTALL spatial; LOAD spatial; INSTALL httpfs; LOAD httpfs;
-SELECT count(*) FROM 'https://example.invalid/prefix/collection/data.parquet';
+-- Autocomplete, from the 3.6 MB index
+SELECT name, country_name, level, name_dupes
+FROM 'https://data.source.coop/portolan-mirrors/geoboundaries/names/cgaz_names.parquet'
+WHERE name_norm LIKE 'zurich%'
+ORDER BY level;
 ```

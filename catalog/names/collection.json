@@ -1,0 +1,263 @@
+{
+  "type": "Collection",
+  "stac_version": "1.1.0",
+  "stac_extensions": [
+    "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json",
+    "https://stac-extensions.github.io/table/v1.2.0/schema.json",
+    "https://stac-extensions.github.io/file/v2.1.0/schema.json",
+    "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json"
+  ],
+  "id": "names",
+  "title": "CGAZ Name Search Index",
+  "description": "A search sidecar, not a boundary dataset: one row per named administrative unit across all three CGAZ levels, 52,398 rows in 3.6 MB, sorted by a folded form of the name. The sort is the whole design. The intended use is to load the file whole, which at this size takes a couple of hundred milliseconds in a browser; row group statistics on `name_norm` are tight, non-overlapping alphabetical ranges, so a client that will not load 3.6 MB can instead resolve a typed prefix from one or two 101 KiB row groups by HTTP range request. Each row carries the `shapeID` that joins it back to the boundary collection for its level, a bbox to fly a map to, a point inside the unit, and how many other units share the same name. The [agent guide](AGENTS.md) has both lookup recipes and the join back to geometry.",
+  "license": "CC-BY-4.0",
+  "keywords": [
+    "geocoding",
+    "search index",
+    "place names",
+    "gazetteer",
+    "autocomplete",
+    "geoBoundaries",
+    "CGAZ",
+    "GeoParquet"
+  ],
+  "providers": [
+    {
+      "name": "geoBoundaries, William & Mary geoLab",
+      "description": "The geoBoundaries Global Database of Political Administrative Boundaries, built by the community and William & Mary geoLab. CGAZ composites country submissions against US Department of State international boundaries.",
+      "roles": [
+        "producer",
+        "licensor"
+      ],
+      "url": "https://www.geoboundaries.org/"
+    },
+    {
+      "name": "Portolan Mirrors",
+      "description": "Republishes the CGAZ release as cloud-native GeoParquet and PMTiles. Adds no boundaries and changes no geometry.",
+      "roles": [
+        "processor",
+        "host"
+      ],
+      "url": "https://github.com/portolan-mirrors/geoboundaries"
+    }
+  ],
+  "extent": {
+    "spatial": {
+      "bbox": [
+        [
+          -180.0,
+          -90.0,
+          180.0,
+          83.6334
+        ]
+      ]
+    },
+    "temporal": {
+      "interval": [
+        [
+          "2024-04-20T10:23:58Z",
+          "2024-04-20T10:23:58Z"
+        ]
+      ]
+    }
+  },
+  "updated": "2026-11-12T00:00:00Z",
+  "table:primary_geometry": "geometry",
+  "table:row_count": 52398,
+  "table:columns": [
+    {
+      "name": "name",
+      "type": "string",
+      "description": "The unit's name exactly as geoBoundaries publishes it, including the 38 rows whose upstream text is double-encoded UTF-8. Display this; search name_norm."
+    },
+    {
+      "name": "name_norm",
+      "type": "string",
+      "description": "Derived, and the column the file is sorted by. The name lowercased with Unicode case folding and with combining accent marks stripped through NFKD, so 'Zurich' finds 'Z\u00fcrich'. The 38 double-encoded upstream names are repaired here first, so 'region de valparaiso' finds the row whose published name is 'Regi\u00c3\u00b3n de Valpara\u00c3\u00adso'. Scripts with no Latin decomposition, such as Han, are lowercased and otherwise unchanged."
+    },
+    {
+      "name": "level",
+      "type": "int8",
+      "description": "0, 1 or 2: which boundary collection holds this unit's geometry. 218 rows at level 0, 3,202 at level 1, 48,978 at level 2."
+    },
+    {
+      "name": "shape_type",
+      "type": "string",
+      "description": "ADM0, ADM1, ADM2 or DISP, from the boundary row. Every row's shape_type matches its level, because the index takes each unit only from the file that level natively belongs to; DISP rows sit at level 0."
+    },
+    {
+      "name": "country",
+      "type": "string",
+      "description": "The boundary row's shapeGroup: ISO 3166-1 alpha-3, or a geoBoundaries disputed-area code 111 to 129. Also the join key back to the ADM0 collection for level-0 rows."
+    },
+    {
+      "name": "country_name",
+      "type": "string",
+      "description": "Derived. The ADM0 shapeName for this row's country, joined on shapeGroup, so an autocomplete can show 'Zurich, Switzerland' without a second fetch. NULL for the 20 disputed areas, which have no ADM0 parent."
+    },
+    {
+      "name": "shape_id",
+      "type": "string",
+      "description": "The boundary row's shapeID, and the join key back to the ADM1 or ADM2 collection. NULL for every level-0 row, because CGAZ ADM0 publishes no shapeID; join those on country instead."
+    },
+    {
+      "name": "area_km2",
+      "type": "double",
+      "description": "Derived. The unit's geodesic area in square kilometres, copied from its boundary row and rounded to three decimals. Useful as a relevance weight: of two units with the same name, the larger is usually the one meant."
+    },
+    {
+      "name": "name_dupes",
+      "type": "int32",
+      "description": "Derived. How many rows in this index share this row's name_norm, counted worldwide and across levels. 1 for 44,258 rows; 878 rows sit in a name shared by 10 or more units, and 32 units are called Washington. An autocomplete needs this to decide when to disambiguate."
+    },
+    {
+      "name": "bbox",
+      "type": "struct",
+      "description": "GeoParquet 1.1 bbox covering struct, xmin, ymin, xmax, ymax in CRS84: the unit's full extent, copied from its boundary row. This is what to fly a map to after a hit. Stored as float32 rather than float64 to halve what it costs in a file meant to be loaded whole, with every bound rounded outward so the box still contains the unit. Verified against the ADM2 collection: 0 of 48,978 joined rows have a bbox narrower than their true extent. Precision is about 1e-5 degrees, roughly a metre. The boundary collections keep float64."
+    },
+    {
+      "name": "geometry",
+      "type": "geometry",
+      "description": "Derived. A Point as WKB in CRS84, from ST_PointOnSurface of the unit's polygon, so it is guaranteed to fall inside the unit rather than outside it the way a centroid can. Use it for a marker, not as the unit's geometry."
+    }
+  ],
+  "assets": {
+    "data": {
+      "href": "./cgaz_names.parquet",
+      "type": "application/vnd.apache.parquet",
+      "title": "Name Search Index, GeoParquet 1.1 (35 row groups of 1,536 rows, zstd)",
+      "roles": [
+        "data"
+      ],
+      "file:size": 3623011,
+      "file:checksum": "12208d61f45f611ae97ed4b0bf5df6ead8b4109c08e4151ae009c208fd9264163916",
+      "table:primary_geometry": "geometry"
+    },
+    "pmtiles": {
+      "href": "./names.pmtiles",
+      "type": "application/vnd.pmtiles",
+      "title": "Name Search Index, vector tiles to zoom 8",
+      "roles": [
+        "visual",
+        "data"
+      ],
+      "file:size": 11967495,
+      "file:checksum": "12200b147aac0db797719b3af49f49ff6a91fa531b624b24949e38aaa191d8b09b42",
+      "pmtiles:layers": [
+        "names"
+      ]
+    },
+    "style-default": {
+      "href": "./styles/default.json",
+      "type": "application/vnd.mapbox.style+json",
+      "title": "Indexed names by administrative level",
+      "roles": [
+        "style",
+        "default"
+      ],
+      "file:size": 973,
+      "file:checksum": "1220ee567f730525b61ef7bb7196f9f295e501ced52b0a414c2bd4b9b5071abd4358"
+    },
+    "style-ambiguity": {
+      "href": "./styles/ambiguity.json",
+      "type": "application/vnd.mapbox.style+json",
+      "title": "How many units share this name",
+      "roles": [
+        "style"
+      ],
+      "file:size": 1006,
+      "file:checksum": "1220c75df6a6a6272dcf5d3765434ee5dd7fcdac186e421353e0f92821b5a8c51f3c"
+    },
+    "style-unit-area": {
+      "href": "./styles/unit-area.json",
+      "type": "application/vnd.mapbox.style+json",
+      "title": "Area of the named unit",
+      "roles": [
+        "style"
+      ],
+      "file:size": 1039,
+      "file:checksum": "1220c6d4f3c7641c59b05f5c5ff4878995fbb91c932b2d2a9b37052a6aa063881379"
+    },
+    "thumbnail": {
+      "href": "./names.thumb.png",
+      "type": "image/png",
+      "title": "Name Search Index, rendered from the default style",
+      "roles": [
+        "thumbnail"
+      ],
+      "file:size": 186189,
+      "file:checksum": "12203d9a3c39755478624f9ae8e82536238e43bf3a508f78976ee1ffb1f46f349690"
+    }
+  },
+  "links": [
+    {
+      "rel": "root",
+      "href": "../catalog.json",
+      "type": "application/json",
+      "title": "geoBoundaries CGAZ Global Administrative Boundaries"
+    },
+    {
+      "rel": "parent",
+      "href": "../catalog.json",
+      "type": "application/json",
+      "title": "geoBoundaries CGAZ Global Administrative Boundaries"
+    },
+    {
+      "rel": "describedby",
+      "href": "./README.md",
+      "type": "text/markdown",
+      "title": "Collection README"
+    },
+    {
+      "rel": "agents",
+      "href": "./AGENTS.md",
+      "type": "text/markdown",
+      "title": "Collection agent guide"
+    },
+    {
+      "rel": "via",
+      "href": "https://www.geoboundaries.org/globalDownloads.html",
+      "type": "text/html",
+      "title": "geoBoundaries CGAZ downloads (upstream source)"
+    },
+    {
+      "rel": "cite-as",
+      "href": "https://doi.org/10.1371/journal.pone.0231866",
+      "type": "text/html",
+      "title": "Runfola et al. (2020), geoBoundaries: A global database of political administrative boundaries, PLoS ONE 15(4): e0231866"
+    },
+    {
+      "rel": "license",
+      "href": "https://creativecommons.org/licenses/by/4.0/",
+      "type": "text/html",
+      "title": "Creative Commons Attribution 4.0 International"
+    },
+    {
+      "rel": "pmtiles",
+      "href": "./names.pmtiles",
+      "type": "application/vnd.pmtiles",
+      "title": "Name Search Index, vector tiles",
+      "pmtiles:layers": [
+        "names"
+      ]
+    },
+    {
+      "rel": "related",
+      "href": "../adm0/collection.json",
+      "type": "application/json",
+      "title": "CGAZ ADM0 - Country Boundaries"
+    },
+    {
+      "rel": "related",
+      "href": "../adm1/collection.json",
+      "type": "application/json",
+      "title": "CGAZ ADM1 - First-Level Administrative Boundaries"
+    },
+    {
+      "rel": "related",
+      "href": "../adm2/collection.json",
+      "type": "application/json",
+      "title": "CGAZ ADM2 - Second-Level Administrative Boundaries"
+    }
+  ]
+}
