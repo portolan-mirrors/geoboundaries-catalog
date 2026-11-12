@@ -29,7 +29,6 @@ from gbcommon import (
     SOURCE_COMMIT_DATE,
     source_path,
     source_url,
-    trailing_bytes,
 )
 
 REPO = Path(__file__).resolve().parents[1]
