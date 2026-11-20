@@ -37,6 +37,59 @@ PUBLIC_BASE = "https://data.source.coop/portolan-mirrors/geoboundaries-catalog"
 
 LICENSE = "CC-BY-4.0"
 
+# The gazetteer extensions (design doc / docs/design/widgets-architecture.md
+# in cng-map-widgets). Published and authoritative at these URLs.
+GAZETTEER_SCHEMA = "https://cholmes.github.io/stac-gazetteer/gazetteer/v1.0.0/schema.json"
+GAZETTEER_BOUNDARIES_SCHEMA = (
+    "https://cholmes.github.io/stac-gazetteer/gazetteer-boundaries/v1.0.0/schema.json"
+)
+SCIENTIFIC_SCHEMA = "https://stac-extensions.github.io/scientific/v1.0.0/schema.json"
+# Same DOI already carried by every collection's `cite-as` link.
+SCI_DOI = "10.1371/journal.pone.0231866"
+
+NAMES_MANIFEST = CATALOG / "names" / "index.json"
+
+
+def load_names_manifest() -> dict | None:
+    """The hand-maintained geocoder index manifest (cnmw-index/1.0).
+
+    This script never writes it -- tools/make_index_manifest.py does, from
+    the built files -- but the gazetteer/gazetteer-boundaries extension
+    fields below are sourced from it rather than recomputed, so a manifest
+    edit and a collection rebuild never disagree about a row group count or
+    a join column.
+    """
+    if not NAMES_MANIFEST.exists():
+        return None
+    return json.loads(NAMES_MANIFEST.read_text())
+
+
+def gazetteer_boundary_fields(level: int, variant: str, entry: dict) -> dict:
+    """The ``gazetteer:*`` fields for one boundary file, sourced from the manifest.
+
+    ``entry`` is one ``boundaries[]`` element of ``catalog/names/index.json``;
+    ``variant`` is ``"full"`` or ``"display"``. Shared by both call sites: a
+    boundary collection's own `data`/`display` asset, and the names
+    collection's inline ``boundaries-adm{level}-{variant}`` asset.
+    """
+    file_info = entry[variant]
+    fields = {
+        "gazetteer:level": level,
+        "gazetteer:variant": variant,
+        "gazetteer:geometry_column": entry["geometry_column"],
+        # Explicit null is legal and meaningful for ADM0, which has no id
+        # column at all -- see the extension's schema.json comment on
+        # gazetteer:feature_id_column. Must NOT be omitted.
+        "gazetteer:feature_id_column": entry["feature_id_column"],
+        "gazetteer:country_column": entry["country_column"],
+        "gazetteer:row_group_rows": entry["row_group_rows"],
+        "gazetteer:row_groups": file_info["row_groups"],
+        "gazetteer:footer_metadata_bytes": file_info["footer_metadata_bytes"],
+    }
+    if "index_key_column" in entry:
+        fields["gazetteer:index_key_column"] = entry["index_key_column"]
+    return fields
+
 PROVIDERS = [
     {
         "name": "geoBoundaries, William & Mary geoLab",
@@ -743,6 +796,89 @@ def build(spec: dict) -> dict:
             ),
         }
 
+    # Wire up the gazetteer / gazetteer-boundaries STAC extensions
+    # (cholmes.github.io/stac-gazetteer). Every value below is sourced from
+    # catalog/names/index.json -- the hand-maintained manifest -- rather than
+    # recomputed, so the extension fields and the manifest can never disagree.
+    # catalog/names/index.json itself is untouched: it stays published
+    # alongside these extensions during the transition (design doc + the
+    # cng-map-widgets issue #1 "both" ruling).
+    extra_extensions: list[str] = []
+    collection_extra: dict = {}
+    manifest = load_names_manifest()
+
+    if len(spec["source_levels"]) == 1:
+        # A boundary collection (adm0/adm1/adm2): declare the extension for
+        # itself and extend its own data/display assets in place.
+        level = spec["source_levels"][0]
+        extra_extensions.append(GAZETTEER_BOUNDARIES_SCHEMA)
+        if manifest is not None:
+            entry = next(
+                b for b in manifest["boundaries"] if b["level"] == level
+            )
+            for variant, key in (("full", "data"), ("display", "display")):
+                if key not in assets or variant not in entry:
+                    continue
+                assets[key]["roles"] = assets[key]["roles"] + ["gazetteer-boundaries"]
+                assets[key].update(gazetteer_boundary_fields(level, variant, entry))
+    elif spec["dir"] == "names" and manifest is not None:
+        extra_extensions += [
+            SCIENTIFIC_SCHEMA, GAZETTEER_SCHEMA, GAZETTEER_BOUNDARIES_SCHEMA,
+        ]
+        collection_extra["sci:citation"] = manifest["attribution"][0]["text"]
+        collection_extra["sci:doi"] = SCI_DOI
+        collection_extra["gazetteer:levels"] = manifest["levels"]
+        # The normalization algorithm identifier is not itself a manifest
+        # field -- `index.sorted_by` names the columns, not the algorithm --
+        # so this one string is the fixed identifier for
+        # tools/gbcommon.py's normalize_name, not read off the manifest.
+        collection_extra["gazetteer:normalization"] = "nfd-strip-marks-lower/1"
+        collection_extra["gazetteer:sort"] = manifest["index"]["sorted_by"]
+        collection_extra["gazetteer:dropped_unnamed"] = manifest["dropped_unnamed"]
+        collection_extra["gazetteer:stats_truncated"] = manifest["stats_truncated"]
+
+        assets["data"]["roles"] = assets["data"]["roles"] + ["gazetteer-index"]
+        assets["data"].update({
+            # Not in the task's field list for this asset, but the target
+            # example (spec-draft/examples/geoboundaries-cgaz-collection.json)
+            # carries it on the index asset, and @cnmw/geocoder-core's STAC
+            # reader (normalizeStacGazetteerCollection) reads `rows` from
+            # exactly this asset field -- without it a client round-trips to
+            # `rows: undefined`. stats["rows"] is the same number already on
+            # the collection's own table:row_count.
+            "table:row_count": stats["rows"],
+            "gazetteer:row_groups": manifest["index"]["row_groups"],
+            "gazetteer:row_group_rows": manifest["index"]["row_group_rows"],
+            "gazetteer:feature_id_column": manifest["index"]["feature_id_column"],
+            "gazetteer:footer_metadata_bytes": manifest["index"]["footer_metadata_bytes"],
+        })
+
+        # Inline gazetteer-boundaries assets for every level/variant, so a
+        # client that has fetched only this one collection document can
+        # still resolve geometry -- the "both" ruling in cng-map-widgets
+        # issue #1: boundary collections self-describe AND the names
+        # collection carries the same facts inline.
+        for entry in manifest["boundaries"]:
+            b_level = entry["level"]
+            for variant in ("full", "display"):
+                if variant not in entry:
+                    continue
+                file_info = entry[variant]
+                asset_key = f"boundaries-adm{b_level}-{variant}"
+                asset = {
+                    "href": file_info["url"],
+                    "type": "application/vnd.apache.parquet",
+                    "title": f"ADM{b_level} boundaries ({variant})",
+                    "roles": (
+                        ["gazetteer-boundaries", "overview"]
+                        if variant == "display" else ["gazetteer-boundaries"]
+                    ),
+                    "file:size": file_info["size"],
+                    "table:row_count": file_info["row_count"],
+                }
+                asset.update(gazetteer_boundary_fields(b_level, variant, entry))
+                assets[asset_key] = asset
+
     links = [
         {"rel": "root", "href": "../catalog.json", "type": "application/json",
          "title": "geoBoundaries CGAZ Global Administrative Boundaries"},
@@ -788,6 +924,7 @@ def build(spec: dict) -> dict:
             "https://stac-extensions.github.io/table/v1.2.0/schema.json",
             "https://stac-extensions.github.io/file/v2.1.0/schema.json",
             "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json",
+            *extra_extensions,
         ],
         "id": spec["id"],
         "title": spec["title"],
@@ -811,6 +948,7 @@ def build(spec: dict) -> dict:
         # date the upstream GeoPackages were downloaded, not the build time,
         # because that is what a reader compares against the live upstream.
         "updated": f"{EXTRACTION_DATE}T00:00:00Z",
+        **collection_extra,
         "table:primary_geometry": stats["primary"],
         "table:row_count": stats["rows"],
         "table:columns": spec["columns"],

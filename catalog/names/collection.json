@@ -5,7 +5,10 @@
     "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json",
     "https://stac-extensions.github.io/table/v1.2.0/schema.json",
     "https://stac-extensions.github.io/file/v2.1.0/schema.json",
-    "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json"
+    "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json",
+    "https://stac-extensions.github.io/scientific/v1.0.0/schema.json",
+    "https://cholmes.github.io/stac-gazetteer/gazetteer/v1.0.0/schema.json",
+    "https://cholmes.github.io/stac-gazetteer/gazetteer-boundaries/v1.0.0/schema.json"
   ],
   "id": "names",
   "title": "CGAZ Name Search Index",
@@ -62,6 +65,21 @@
     }
   },
   "updated": "2026-11-12T00:00:00Z",
+  "sci:citation": "Boundaries: geoBoundaries CGAZ. Runfola, D., Anderson, A., Baier, H., et al. (2020). geoBoundaries: A global database of political administrative boundaries. PLoS ONE 15(4): e0231866. https://doi.org/10.1371/journal.pone.0231866",
+  "sci:doi": "10.1371/journal.pone.0231866",
+  "gazetteer:levels": [
+    0,
+    1,
+    2
+  ],
+  "gazetteer:normalization": "nfd-strip-marks-lower/1",
+  "gazetteer:sort": [
+    "name_norm",
+    "level",
+    "country"
+  ],
+  "gazetteer:dropped_unnamed": 37,
+  "gazetteer:stats_truncated": false,
   "table:primary_geometry": "geometry",
   "table:row_count": 52398,
   "table:columns": [
@@ -132,11 +150,17 @@
       "type": "application/vnd.apache.parquet",
       "title": "Name Search Index, GeoParquet 1.1 (35 row groups of 1,536 rows, zstd)",
       "roles": [
-        "data"
+        "data",
+        "gazetteer-index"
       ],
       "file:size": 3901414,
       "file:checksum": "12200b705985fd9bfc2a0e40564d4e13b9d17f98b44bd32bc1388322bee2455096df",
-      "table:primary_geometry": "geometry"
+      "table:primary_geometry": "geometry",
+      "table:row_count": 52398,
+      "gazetteer:row_groups": 35,
+      "gazetteer:row_group_rows": 1536,
+      "gazetteer:feature_id_column": "shape_id",
+      "gazetteer:footer_metadata_bytes": 75606
     },
     "pmtiles": {
       "href": "./names.pmtiles",
@@ -239,6 +263,119 @@
       "file:size": 10364,
       "file:checksum": "1220c371f353a06bd76f5ff22cbf761889820c334a31b8b7abd25953679455eb8460",
       "description": "The kilobyte a client fetches before the index: its size, row group count, checksum, catalog version, the URL, row count and row_group_rows of every boundary and display file, and the attribution each one requires with a share_alike flag. row_group_rows is what a client combines with a names-index row's geometry_ref to range-read exactly one row group of the boundary file instead of scanning candidates by statistics. Also documents the level-0 join (country/shapeGroup, no shapeID) and the absent cnmw:catalog_version footer metadata."
+    },
+    "boundaries-adm0-full": {
+      "href": "../adm0/cgaz_adm0.parquet",
+      "type": "application/vnd.apache.parquet",
+      "title": "ADM0 boundaries (full)",
+      "roles": [
+        "gazetteer-boundaries"
+      ],
+      "file:size": 104201824,
+      "table:row_count": 218,
+      "gazetteer:level": 0,
+      "gazetteer:variant": "full",
+      "gazetteer:geometry_column": "geometry",
+      "gazetteer:feature_id_column": null,
+      "gazetteer:country_column": "shapeGroup",
+      "gazetteer:row_group_rows": 1,
+      "gazetteer:row_groups": 218,
+      "gazetteer:footer_metadata_bytes": 271716,
+      "gazetteer:index_key_column": "country"
+    },
+    "boundaries-adm0-display": {
+      "href": "../adm0/cgaz_adm0_display.parquet",
+      "type": "application/vnd.apache.parquet",
+      "title": "ADM0 boundaries (display)",
+      "roles": [
+        "gazetteer-boundaries",
+        "overview"
+      ],
+      "file:size": 7521581,
+      "table:row_count": 218,
+      "gazetteer:level": 0,
+      "gazetteer:variant": "display",
+      "gazetteer:geometry_column": "geometry",
+      "gazetteer:feature_id_column": null,
+      "gazetteer:country_column": "shapeGroup",
+      "gazetteer:row_group_rows": 1,
+      "gazetteer:row_groups": 218,
+      "gazetteer:footer_metadata_bytes": 189008,
+      "gazetteer:index_key_column": "country"
+    },
+    "boundaries-adm1-full": {
+      "href": "../adm1/cgaz_adm1.parquet",
+      "type": "application/vnd.apache.parquet",
+      "title": "ADM1 boundaries (full)",
+      "roles": [
+        "gazetteer-boundaries"
+      ],
+      "file:size": 80585156,
+      "table:row_count": 3224,
+      "gazetteer:level": 1,
+      "gazetteer:variant": "full",
+      "gazetteer:geometry_column": "geometry",
+      "gazetteer:feature_id_column": "shapeID",
+      "gazetteer:country_column": "shapeGroup",
+      "gazetteer:row_group_rows": 16,
+      "gazetteer:row_groups": 202,
+      "gazetteer:footer_metadata_bytes": 267958
+    },
+    "boundaries-adm1-display": {
+      "href": "../adm1/cgaz_adm1_display.parquet",
+      "type": "application/vnd.apache.parquet",
+      "title": "ADM1 boundaries (display)",
+      "roles": [
+        "gazetteer-boundaries",
+        "overview"
+      ],
+      "file:size": 13179712,
+      "table:row_count": 3224,
+      "gazetteer:level": 1,
+      "gazetteer:variant": "display",
+      "gazetteer:geometry_column": "geometry",
+      "gazetteer:feature_id_column": "shapeID",
+      "gazetteer:country_column": "shapeGroup",
+      "gazetteer:row_group_rows": 16,
+      "gazetteer:row_groups": 202,
+      "gazetteer:footer_metadata_bytes": 205330
+    },
+    "boundaries-adm2-full": {
+      "href": "../adm2/cgaz_adm2.parquet",
+      "type": "application/vnd.apache.parquet",
+      "title": "ADM2 boundaries (full)",
+      "roles": [
+        "gazetteer-boundaries"
+      ],
+      "file:size": 104282056,
+      "table:row_count": 49349,
+      "gazetteer:level": 2,
+      "gazetteer:variant": "full",
+      "gazetteer:geometry_column": "geometry",
+      "gazetteer:feature_id_column": "shapeID",
+      "gazetteer:country_column": "shapeGroup",
+      "gazetteer:row_group_rows": 256,
+      "gazetteer:row_groups": 193,
+      "gazetteer:footer_metadata_bytes": 261810
+    },
+    "boundaries-adm2-display": {
+      "href": "../adm2/cgaz_adm2_display.parquet",
+      "type": "application/vnd.apache.parquet",
+      "title": "ADM2 boundaries (display)",
+      "roles": [
+        "gazetteer-boundaries",
+        "overview"
+      ],
+      "file:size": 42419433,
+      "table:row_count": 49349,
+      "gazetteer:level": 2,
+      "gazetteer:variant": "display",
+      "gazetteer:geometry_column": "geometry",
+      "gazetteer:feature_id_column": "shapeID",
+      "gazetteer:country_column": "shapeGroup",
+      "gazetteer:row_group_rows": 256,
+      "gazetteer:row_groups": 193,
+      "gazetteer:footer_metadata_bytes": 200258
     }
   },
   "links": [

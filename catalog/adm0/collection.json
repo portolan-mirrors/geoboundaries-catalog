@@ -5,7 +5,8 @@
     "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json",
     "https://stac-extensions.github.io/table/v1.2.0/schema.json",
     "https://stac-extensions.github.io/file/v2.1.0/schema.json",
-    "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json"
+    "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json",
+    "https://cholmes.github.io/stac-gazetteer/gazetteer-boundaries/v1.0.0/schema.json"
   ],
   "id": "adm0",
   "title": "CGAZ ADM0 - Country Boundaries",
@@ -123,11 +124,21 @@
       "type": "application/vnd.apache.parquet",
       "title": "Country Boundaries, GeoParquet 1.1 (218 row groups of 1 rows, zstd)",
       "roles": [
-        "data"
+        "data",
+        "gazetteer-boundaries"
       ],
       "file:size": 104201824,
       "file:checksum": "12203e0b97366780cf4e90466a1c1759a8923f0f62dd88aada50019282712cba4c78",
-      "table:primary_geometry": "geometry"
+      "table:primary_geometry": "geometry",
+      "gazetteer:level": 0,
+      "gazetteer:variant": "full",
+      "gazetteer:geometry_column": "geometry",
+      "gazetteer:feature_id_column": null,
+      "gazetteer:country_column": "shapeGroup",
+      "gazetteer:row_group_rows": 1,
+      "gazetteer:row_groups": 218,
+      "gazetteer:footer_metadata_bytes": 271716,
+      "gazetteer:index_key_column": "country"
     },
     "pmtiles": {
       "href": "./adm0.pmtiles",
@@ -149,13 +160,23 @@
       "title": "Country Boundaries, display and filter geometry (218 row groups of 1 rows, aligned with the data asset)",
       "roles": [
         "data",
-        "overview"
+        "overview",
+        "gazetteer-boundaries"
       ],
       "description": "The same rows in the same order and the same row group boundaries as the data asset, with geometry simplified and then buffered **outward** by the simplification tolerance, so the shape contains the true boundary rather than cutting inside it. Built for drawing an outline fast and for pre-filtering another dataset, where over-fetching is cheap and a missing edge feature is a wrong answer. Neighbouring units overlap in the margin. Do not measure area from it, do not use it to decide which side of a border a point falls on, and do not publish it as a boundary. See the [catalog agent guide](../AGENTS.md) and [changes-from-upstream.md](../changes-from-upstream.md).",
       "file:size": 7521581,
       "file:checksum": "1220f91188472f2555e565b6270c04c1768f44d53159a1ba5560e230574275022544",
       "table:primary_geometry": "geometry",
-      "table:row_count": 218
+      "table:row_count": 218,
+      "gazetteer:level": 0,
+      "gazetteer:variant": "display",
+      "gazetteer:geometry_column": "geometry",
+      "gazetteer:feature_id_column": null,
+      "gazetteer:country_column": "shapeGroup",
+      "gazetteer:row_group_rows": 1,
+      "gazetteer:row_groups": 218,
+      "gazetteer:footer_metadata_bytes": 189008,
+      "gazetteer:index_key_column": "country"
     },
     "style-default": {
       "href": "./styles/default.json",
