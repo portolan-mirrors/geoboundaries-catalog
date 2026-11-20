@@ -153,14 +153,14 @@
         "data",
         "gazetteer-index"
       ],
-      "file:size": 3901414,
-      "file:checksum": "12200b705985fd9bfc2a0e40564d4e13b9d17f98b44bd32bc1388322bee2455096df",
+      "file:size": 3900925,
+      "file:checksum": "1220af12dcffcba683118be0064c36994fbabf6403bdb6a77dc97d4b5cb09f31a481",
       "table:primary_geometry": "geometry",
       "table:row_count": 52398,
       "gazetteer:row_groups": 35,
       "gazetteer:row_group_rows": 1536,
       "gazetteer:feature_id_column": "shape_id",
-      "gazetteer:footer_metadata_bytes": 75606
+      "gazetteer:footer_metadata_bytes": 75626
     },
     "pmtiles": {
       "href": "./names.pmtiles",
@@ -261,7 +261,7 @@
         "metadata"
       ],
       "file:size": 10364,
-      "file:checksum": "1220c371f353a06bd76f5ff22cbf761889820c334a31b8b7abd25953679455eb8460",
+      "file:checksum": "1220d228ed38fac5b8eb2090bdf6f67d2fe295df161b619e6a8a6425da7a076fc142",
       "description": "The kilobyte a client fetches before the index: its size, row group count, checksum, catalog version, the URL, row count and row_group_rows of every boundary and display file, and the attribution each one requires with a share_alike flag. row_group_rows is what a client combines with a names-index row's geometry_ref to range-read exactly one row group of the boundary file instead of scanning candidates by statistics. Also documents the level-0 join (country/shapeGroup, no shapeID) and the absent cnmw:catalog_version footer metadata."
     },
     "boundaries-adm0-full": {
