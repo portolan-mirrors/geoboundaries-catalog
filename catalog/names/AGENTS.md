@@ -225,11 +225,23 @@ Zürich  Switzerland  2  2    93
 
 ### How `name_norm` is built
 
-NFKD decomposition, combining marks (Unicode category `Mn`) dropped, recomposed
-NFC, Unicode case folding, strip. So `Zürich` normalizes to `zurich` and
-`Malmö` to `malmo` **[derived]**. Scripts with no Latin decomposition, such as
-Han and Cyrillic, are lowercased and otherwise unchanged, so `鹿港鎮` is
-findable only by the same script.
+`name_norm` must match `normalizeName` in `@cnmw/spec`
+(`packages/spec/src/normalize.js`) exactly, byte for byte — it is the
+normative algorithm a client computes its search key with, and `name_norm`
+is the column this file is sorted by (see "The sort guarantee" in the
+widgets repo's AGENTS.md). The steps, in order: NFD decomposition; every
+Unicode combining mark (category `M*` — `Mn`, `Mc`, `Me`) dropped; lowercase;
+every character that is not a Unicode letter, a Unicode digit, a space, an
+apostrophe (`'`) or a hyphen (`-`) removed; whitespace runs collapsed to one
+space; trim. So `Zürich` normalizes to `zurich` and `Malmö` to `malmo`
+**[derived]**. Scripts with no Latin decomposition, such as Han and
+Cyrillic, are lowercased (where they have case) and otherwise unchanged, so
+`鹿港鎮` is findable only by the same script. The character-removal step
+also means punctuation such as `"`, `/`, `(` and `)` is deleted rather than
+kept or replaced with a space — `Mendi/Munihu District` normalizes to
+`mendimunihu district`, not `mendi/munihu district` — because keeping it
+would sort the row somewhere a client's own `normalizeName` call never
+looks (fixed 2026-11-20; see `tools/gbcommon.py`'s `normalize_name`).
 
 Before normalizing, 38 rows whose upstream text is double-encoded UTF-8 are
 repaired: the string is encoded to Latin-1 and decoded as UTF-8, applied only

@@ -39,8 +39,8 @@ which is required because every column chunk is zstd.
 676 two-letter prefixes, a prefix touches a minimum of one, a median of one and
 a maximum of three row groups — so a prefix lookup is one or two reads of
 ~109 KiB without downloading the file. One range request of the file's last
-107,089 bytes leaves a client holding all of its metadata, and
-[`index.json`](index.json) publishes that number, along with the 75,606 bytes
+107,128 bytes leaves a client holding all of its metadata, and
+[`index.json`](index.json) publishes that number, along with the 75,626 bytes
 of thrift footer a hyparquet client needs on its own; pass one of them as
 `initialFetchSize` rather than letting hyparquet speculate a 512 KiB tail.
 
@@ -50,8 +50,9 @@ Both paths, with runnable code and the join back to geometry, are in
 ## What each row carries
 
 `name` as geoBoundaries publishes it, for display. `name_norm`, the folded form
-to search: lowercased with Unicode case folding and with accents stripped, so
-"zurich" finds "Zürich". `level` and `shape_type`, saying which boundary
+to search: lowercased, accents stripped, and punctuation outside letters,
+digits, space, apostrophe and hyphen dropped, so "zurich" finds "Zürich".
+`level` and `shape_type`, saying which boundary
 collection holds the geometry. `country` and `country_name`, so an autocomplete
 can show "Zürich, Switzerland" without a second fetch. `shape_id`, the join key.
 `area_km2`, a usable relevance weight. `name_dupes`, how many units share the
