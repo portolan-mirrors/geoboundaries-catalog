@@ -5,7 +5,8 @@
     "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json",
     "https://stac-extensions.github.io/table/v1.2.0/schema.json",
     "https://stac-extensions.github.io/file/v2.1.0/schema.json",
-    "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json"
+    "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json",
+    "https://cholmes.github.io/stac-gazetteer/gazetteer-boundaries/v1.0.0/schema.json"
   ],
   "id": "adm2",
   "title": "CGAZ ADM2 - Second-Level Administrative Boundaries",
@@ -125,11 +126,20 @@
       "type": "application/vnd.apache.parquet",
       "title": "Second-Level Administrative Boundaries, GeoParquet 1.1 (193 row groups of 256 rows, zstd)",
       "roles": [
-        "data"
+        "data",
+        "gazetteer-boundaries"
       ],
       "file:size": 104282056,
       "file:checksum": "122002a06118091991a330795df0384c9491145193837b491589249ccbef782af09d",
-      "table:primary_geometry": "geometry"
+      "table:primary_geometry": "geometry",
+      "gazetteer:level": 2,
+      "gazetteer:variant": "full",
+      "gazetteer:geometry_column": "geometry",
+      "gazetteer:feature_id_column": "shapeID",
+      "gazetteer:country_column": "shapeGroup",
+      "gazetteer:row_group_rows": 256,
+      "gazetteer:row_groups": 193,
+      "gazetteer:footer_metadata_bytes": 261810
     },
     "pmtiles": {
       "href": "./adm2.pmtiles",
@@ -151,13 +161,22 @@
       "title": "Second-Level Administrative Boundaries, display and filter geometry (193 row groups of 256 rows, aligned with the data asset)",
       "roles": [
         "data",
-        "overview"
+        "overview",
+        "gazetteer-boundaries"
       ],
       "description": "The same rows in the same order and the same row group boundaries as the data asset, with geometry simplified and then buffered **outward** by the simplification tolerance, so the shape contains the true boundary rather than cutting inside it. Built for drawing an outline fast and for pre-filtering another dataset, where over-fetching is cheap and a missing edge feature is a wrong answer. Neighbouring units overlap in the margin. Do not measure area from it, do not use it to decide which side of a border a point falls on, and do not publish it as a boundary. See the [catalog agent guide](../AGENTS.md) and [changes-from-upstream.md](../changes-from-upstream.md).",
       "file:size": 42419433,
       "file:checksum": "122029bedbb65be2a9b557f817e78d980e481536e687377f0487677934e99530f829",
       "table:primary_geometry": "geometry",
-      "table:row_count": 49349
+      "table:row_count": 49349,
+      "gazetteer:level": 2,
+      "gazetteer:variant": "display",
+      "gazetteer:geometry_column": "geometry",
+      "gazetteer:feature_id_column": "shapeID",
+      "gazetteer:country_column": "shapeGroup",
+      "gazetteer:row_group_rows": 256,
+      "gazetteer:row_groups": 193,
+      "gazetteer:footer_metadata_bytes": 200258
     },
     "style-default": {
       "href": "./styles/default.json",
