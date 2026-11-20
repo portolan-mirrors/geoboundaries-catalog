@@ -202,19 +202,45 @@ def repair_name_column(table, column: str):
 
 
 def normalize_name(name: str | None) -> str | None:
-    """Lowercase and strip accents, for prefix matching on a sorted column.
+    """Fold a display name into the sort/search key ``name_norm``.
 
-    NFKD decomposes a precomposed accented character into its base character
-    plus a combining mark; dropping category ``Mn`` removes the mark. ``Cote
-    d'Ivoire`` and ``Côte d'Ivoire`` therefore normalize to the same string.
-    Characters with no Latin decomposition, such as Han or Cyrillic, pass
-    through lowercased and otherwise unchanged.
+    This MUST match ``normalizeName`` in ``@cnmw/spec``
+    (``packages/spec/src/normalize.js``) exactly, byte for byte -- that
+    function is normative (AGENTS.md "The sort guarantee") and
+    ``name_norm`` is the column the file is sorted by, so a client computing
+    a different key than this one produced is a client that binary-searches
+    into the wrong place. The algorithm, in order:
+
+    1. NFD decompose (precomposed accented characters split into base +
+       combining mark; e.g. ``Côte`` -> ``Co`` + combining circumflex + ``te``).
+    2. Strip every Unicode combining mark (category ``M*`` -- ``Mn``, ``Mc``
+       and ``Me``, matching the JS ``\\p{M}``), removing the accent.
+    3. Lowercase (``str.lower()``, matching JS ``toLowerCase()`` -- not
+       ``casefold()``, which is more aggressive, e.g. folding ``ß`` to
+       ``ss``).
+    4. Drop every character that is not a Unicode letter (``\\p{L}``:
+       categories starting ``L``) or digit (``\\p{N}``: categories starting
+       ``N``) or a literal space, apostrophe (``'``) or hyphen (``-``). This
+       is the step a prior version of this function skipped entirely, which
+       is what let characters like ``"`` (sorts before every letter) and
+       ``/`` leak into ``name_norm`` and silently break prefix search for
+       ~2.4% of rows (see docs/changes-from-upstream.md).
+    5. Collapse whitespace runs to a single space and trim.
+
+    Characters with no decomposition, such as Han or Cyrillic, pass through
+    lowercased (where they have case) and otherwise unchanged, same as in
+    the JS implementation.
     """
     if name is None:
         return None
-    decomposed = unicodedata.normalize("NFKD", name)
-    stripped = "".join(c for c in decomposed if not unicodedata.combining(c))
-    return unicodedata.normalize("NFC", stripped).casefold().strip()
+    decomposed = unicodedata.normalize("NFD", name)
+    stripped = "".join(c for c in decomposed if unicodedata.category(c)[0] != "M")
+    lowered = stripped.lower()
+    kept = "".join(
+        c for c in lowered
+        if unicodedata.category(c)[0] in ("L", "N") or c in " '-"
+    )
+    return " ".join(kept.split())
 
 
 def shrink_bbox_float32(bbox_array):
